@@ -11,7 +11,7 @@ set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
 set scriptUpdaterNetwork "RoIRC"
 set scriptversion "0.7.0.1"
-set scriptversionUpdated "1.4"
+set scriptversionUpdated "1.5"
 set scriptdebug 0
 
 putlog "$scriptname loading configuration..."
@@ -109,7 +109,7 @@ set usePreconfiguredNetworks 0
 
 ## Array of Preconfigured Networks (only works if usePreconfiguredNetworks is set to 1 )
 array set knownNetworks {
-        RoIRC "10.0.0.1 6666"
+        NetworkName "server_adress server_port" 
 }
 ## Forces to 1 Network  !!!!!!! DISABLED !!!!!!!! FEATURE COMMING SOON !!!!!!!!
 #set zncEnforcedNetwork "irc.shivering-isles.de +6697"
@@ -243,8 +243,8 @@ proc znc:request { nick host handle chan text } {
                         znc:controlpanel:AddUser $username $password
                         znc:blockuser:block $username
                         znc:helpfunction:loadModuleList $username $zncDefaultUserModules
-	                znc:controlpanel:AddNetwork $username RoIRC
-	                znc:controlpanel:SetNetwork bindhost $username RoIRC $vhost
+	                znc:controlpanel:AddNetwork $username Network_name
+	                znc:controlpanel:SetNetwork bindhost $username Network_name $vhost
 			mail:simply:sendUserRequest2 $username $password $vhost
                         if { $networkname != ""} {
                                 set preServer ""
@@ -300,7 +300,7 @@ proc znc:addvhost {nick host handle chan text} {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}addvhost syntax is \"${scriptCommandPrefix}addvhost <zncusername> <vhost>\" for more please use \"${scriptCommandPrefix}help addvhost"
         }
         if [ validuser $username ] {
-                znc:controlpanel:SetNetwork bindhost $username RoIRC $vhost
+                znc:controlpanel:SetNetwork bindhost $username Network_name $vhost
                 znc:controlpanel:AddServer $username your_network_name your_znc_server:6666
                 znc:controlpanel:Set QuitMsg $username "ZNC Account vhost change"
                 znc:controlpanel:Reconnect $username your_network_name
@@ -633,11 +633,11 @@ proc znc:help {nick host handle chan text} {
 ### ZNC - Functions -----------------------------------------------------------
 
 proc znc:controlpanel:AddNetwork { username network } {
-        znc:sendTo:Controlpanel "AddNetwork $username RoIRC"
+        znc:sendTo:Controlpanel "AddNetwork $username network_name_here"
 }
 
 proc znc:controlpanel:AddServer { username network server } {
-        znc:sendTo:Controlpanel "AddServer $username RoIRC 10.0.0.1 6666"
+        znc:sendTo:Controlpanel "AddServer $username network_name_here servername_here server_port"
 }
 
 proc znc:controlpanel:AddUser { username password } {
@@ -673,11 +673,11 @@ proc znc:controlpanel:LoadNetModule { username network modulename {args ""} } {
 }
 
 proc znc:controlpanel:Reconnect { username network } {
-                znc:sendTo:Controlpanel "Reconnect $username RoIRC"
+                znc:sendTo:Controlpanel "Reconnect $username network_name_here"
 }
 
 proc znc:controlpanel:AddChan { username network chan } {
-                znc:sendTo:Controlpanel "ADDChan $username RoIRC #RoIRC"
+                znc:sendTo:Controlpanel "ADDChan $username network_name_here #auto_join_chan"
 }
 
 proc znc:controlpanel:Set { variable username value } {
@@ -893,7 +893,7 @@ proc znc:sendTo:user { command } {
 
 proc mail:sendTo:user { from to subject content {cc "" } } {
         global sendmailPath
-        set msg {From: RoIRC FreeZNC <danii20@roirc.org>}
+        set msg {From: Your_network_name FreeZNC <admin@example.com>}
         append msg \n "To: " [join $to , ]
         append msg \n "Cc: " [join $cc , ]
         append msg \n "Subject: $subject"

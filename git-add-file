@@ -1,0 +1,6 @@
+git add .
+git commit -am "Original Import for znc.tcl"
+git config --global user.email "zion@universalnet.org"
+git config --global user.name "ZioNeL"
+git push origin master
+

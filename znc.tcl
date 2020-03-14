@@ -322,7 +322,7 @@ proc znc:addvhost {nick host handle chan text} {
                 znc:controlpanel:SetNetwork bindhost $username $zncnetworkname $vhost
                 znc:controlpanel:AddServer $username $zncnetworkname $zncircserver:$zncircserverport
                 znc:controlpanel:Set QuitMsg $username "ZNC Account vhost change"
-                znc:controlpanel:Reconnect $username $$zncnetworkname
+                znc:controlpanel:Reconnect $username $zncnetworkname
         } elseif [ validuser $username ] {
                 puthelp "NOTICE $nick :$username has now $vhost as new vhost."
         } else {

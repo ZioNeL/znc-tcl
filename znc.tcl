@@ -9,7 +9,7 @@ set scriptUpdater "ZioN"
 set scriptUpdaterMail "zion@universalnet.org"
 set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
-set scriptUpdaterNetwork "RoIRC"
+set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
 set scriptversionUpdated "2.0"
 set scriptdebug 0
@@ -51,10 +51,10 @@ set sendmailPath "/usr/sbin/sendmail"
 ###----------------------------------------------------------------------------
 
 ## ZNC Network name
-set zncnetworkname "Your_Newtork_name_here"
+set zncnetworkname "your_Network_name"
 
 ## Server Port name
-#set port "6668"
+#set port "6667"
 
 ## ZNC server name
 #set server "irc.universalnet.org"
@@ -63,26 +63,44 @@ set zncnetworkname "Your_Newtork_name_here"
 set zncprefix "*"
 
 ## The DNS-Host of your ZNC Server
-set znchost "znc.example.org "
+set znchost "hostname_or_ip_of_znc_server"
 
 ## The ZNC NON-SSL Port, if not exists set ""
-set zncNonSSLPort "2222"
+set zncNonSSLPort "1234"
 
 ## The ZNC SSL Port, if not exists set ""
 set zncSSLPort ""
 
 ## The ZNC-Webinterface NON-SSL Port, if not exists set ""
-set zncWebNonSSLPort "2222"
+set zncWebNonSSLPort "1234"
 
 ## The ZNC-Webinterface SSL Port, if not exists set ""
 set zncWebSSLPort ""
 
 ## The Name of server support/admin
-set zncAdminName "Your_Nick_Here"
+set zncAdminName "Name_of_ZNC_Admin"
 
 ## The E-Mail address of server support/admin
-set zncAdminMail "admin@example.org"
+set zncAdminMail "znc-admin@example.org"
 set zncRequestMail "znc-request@example.org"
+
+## The ZNC IRC Server
+set zncircserver "irc.example.org"
+set zncircserverport "6667"
+set zncChannelName "#ZNC"
+
+#E-mail Seetings
+proc mail:sendTo:user { from to subject content {cc "" } } {
+        global sendmailPath zncnetworkname zncAdminMail
+        set msg {From: Network_name_here FreeZNC <znc-request@example.org>}
+        append msg \n "To: " [join $to , ]
+        append msg \n "Cc: " [join $cc , ]
+        append msg \n "Subject: $subject"
+        append msg \n\n $content
+
+        exec $sendmailPath -oi -t << $msg
+}
+
 ## The Level of Security for the random generated password for new ZNC-users (recommanded is 3 means [a-zA-Z0-9])
 set zncPasswordSecurityLevel 3
 
@@ -223,7 +241,7 @@ proc znc:vhosts { nick host handle chan text } {
 }
 
 proc znc:request { nick host handle chan text } {
-        global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength zncnetworkname zncDefaultUserModules zncDefaultNetworkModules usePreconfiguredNetworks
+        global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength zncnetworkname zncDefaultUserModules zncDefaultNetworkModules usePreconfiguredNetworks zncnetworkname 
         set username [lindex $text 0]
         set email [lindex $text 1]
         set vhost [lindex $text 2]
@@ -243,8 +261,8 @@ proc znc:request { nick host handle chan text } {
                         znc:controlpanel:AddUser $username $password
                         znc:blockuser:block $username
                         znc:helpfunction:loadModuleList $username $zncDefaultUserModules
-	                znc:controlpanel:AddNetwork $username Network_name
-	                znc:controlpanel:SetNetwork bindhost $username Network_name $vhost
+	                znc:controlpanel:AddNetwork $username $zncnetworkname
+	                znc:controlpanel:SetNetwork bindhost $username $zncnetworkname $vhost
 			mail:simply:sendUserRequest2 $username $password $vhost
                         if { $networkname != ""} {
                                 set preServer ""
@@ -268,9 +286,10 @@ proc znc:request { nick host handle chan text } {
 }
 
 proc znc:confirm {requester host handle chan text} {
-        global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength
+        global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength zncnetworkname zncircserver zncircserverport zncChannelName
         set username [lindex $text 0]
-        set vhost [lindex $text 5]
+        set vhost [lindex $text 1]
+
         if {$username == "" } {
                 puthelp "NOTICE $requester :${scriptCommandPrefix}Confirm syntax is \"${scriptCommandPrefix}Confirm <zncusername>\" for more please use \"${scriptCommandPrefix}help Confirm"
         }
@@ -282,9 +301,9 @@ proc znc:confirm {requester host handle chan text} {
                 chattr $username -C
                 puthelp "NOTICE $requester :$username is now confirmed."
                 puthelp "NOTICE $requester :To Connect to ZNC-Server use as IDENT ${username} and \"${password}\" as server-password"
-                znc:controlpanel:AddServer $username your_network_name your_znc_server:6666
-                znc:controlpanel:AddChan $username your_network_name #your_network_znc_channel_name
-#               znc:controlpanel:Reconnect $username RoIRC
+                znc:controlpanel:AddServer $username $zncnetworkname $zncircserver:$zncircserverport
+                znc:controlpanel:AddChan $username $zncnetworkname $zncChannelName
+#               znc:controlpanel:Reconnect $username $zncnetworkname
         } elseif [ validuser $username ] {
                 puthelp "NOTICE $requester :$username is already confirmed."
         } else {
@@ -293,17 +312,17 @@ proc znc:confirm {requester host handle chan text} {
 }
 
 proc znc:addvhost {nick host handle chan text} {
-        global scriptCommandPrefix
+        global scriptCommandPrefix zncnetworkname zncircserver zncircserverport zncChannelName 
         set username [lindex $text 0]
         set vhost [lindex $text 1]
         if {$username == "" } {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}addvhost syntax is \"${scriptCommandPrefix}addvhost <zncusername> <vhost>\" for more please use \"${scriptCommandPrefix}help addvhost"
         }
         if [ validuser $username ] {
-                znc:controlpanel:SetNetwork bindhost $username Network_name $vhost
-                znc:controlpanel:AddServer $username your_network_name your_znc_server:6666
+                znc:controlpanel:SetNetwork bindhost $username $zncnetworkname $vhost
+                znc:controlpanel:AddServer $username $zncnetworkname $zncircserver:$zncircserverport
                 znc:controlpanel:Set QuitMsg $username "ZNC Account vhost change"
-                znc:controlpanel:Reconnect $username your_network_name
+                znc:controlpanel:Reconnect $username $$zncnetworkname
         } elseif [ validuser $username ] {
                 puthelp "NOTICE $nick :$username has now $vhost as new vhost."
         } else {
@@ -633,11 +652,13 @@ proc znc:help {nick host handle chan text} {
 ### ZNC - Functions -----------------------------------------------------------
 
 proc znc:controlpanel:AddNetwork { username network } {
-        znc:sendTo:Controlpanel "AddNetwork $username network_name_here"
+global zncnetworkname
+        znc:sendTo:Controlpanel "AddNetwork $username $zncnetworkname"
 }
 
 proc znc:controlpanel:AddServer { username network server } {
-        znc:sendTo:Controlpanel "AddServer $username network_name_here servername_here server_port"
+global zncnetworkname zncircserver zncircserverport
+        znc:sendTo:Controlpanel "AddServer $username $zncnetworkname $zncircserver $zncircserverport"
 }
 
 proc znc:controlpanel:AddUser { username password } {
@@ -672,12 +693,12 @@ proc znc:controlpanel:LoadNetModule { username network modulename {args ""} } {
         }
 }
 
-proc znc:controlpanel:Reconnect { username network } {
-                znc:sendTo:Controlpanel "Reconnect $username network_name_here"
+proc znc:controlpanel:Reconnect { username zncnetworkname } {
+                znc:sendTo:Controlpanel "Reconnect $username $zncnetworkname"
 }
 
-proc znc:controlpanel:AddChan { username network chan } {
-                znc:sendTo:Controlpanel "ADDChan $username network_name_here #auto_join_chan"
+proc znc:controlpanel:AddChan { username zncnetworkname zncChannelName } {
+                znc:sendTo:Controlpanel "ADDChan $username $zncnetworkname $zncChannelName"
 }
 
 proc znc:controlpanel:Set { variable username value } {
@@ -781,7 +802,7 @@ proc mail:simply:send2 { usermail subject content } {
 }
 
 proc mail:simply:sendUserRequest2 { username password vhost } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail zncRequestMail
+        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail zncRequestMail zncnetworkname
         set email [getuser $username COMMENT]
         set content "Hello!!! \n $username requested a FREE ZNC-Account hosted by $zncnetworkname\n"
         append content \n "ZNC Connection Port is: $zncNonSSLPort"
@@ -798,7 +819,7 @@ proc mail:simply:sendUserRequest2 { username password vhost } {
 
 
 proc mail:simply:sendUserRequest { username password } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
+        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail 
         set email [getuser $username COMMENT]
         set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
         append content \n "Your ZNC Connection Host is: $znchost\n"
@@ -811,7 +832,6 @@ proc mail:simply:sendUserRequest { username password } {
         append content \n "Your ZNC Connection Port is: $zncNonSSLPort"
         append content \n "Your ZNC Username is: $username"
         append content \n "Your ZNC Password is: $password"
-        append content \n "ZNC vhost set is: $vhost"
         append content \n "To connect to your ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} ${password}"
 #       if { $zncWebNonSSLPort != "" } {
 #       append content \n "To login via NON-SSL-Webinterface goto: http://${znchost}:${zncWebNonSSLPort}"
@@ -831,7 +851,7 @@ proc mail:simply:sendUserDeny { username } {
         set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
         append content \n "Your ZNC Request was denyed.\n"
         if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact danii20@roirc.org"
+        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact $zncAdminMail"
         }
         mail:simply:send $email "ZNC-Account Request Denyed at $zncnetworkname" $content
 }
@@ -842,7 +862,7 @@ proc mail:simply:sendUserDel { username } {
         set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
         append content \n "Your Free-ZNC account was deleted.\n"
         if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact danii20@roirc.org"
+        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact $zncAdminMail"
         }
         mail:simply:send $email "ZNC-Account Deleted at $zncnetworkname" $content
 }
@@ -853,7 +873,7 @@ proc mail:simply:sendUsernoIdle { username } {
         set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
         append content \n "Your Free-ZNC account was deleted due of inactivity period for more than 15 days.\n"
         if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact danii20@roirc.org"
+        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact $zncAdminMail"
         }
         mail:simply:send $email "ZNC-Account Deleted at $zncnetworkname" $content
 }
@@ -864,8 +884,9 @@ proc eggdrop:helpfunction:isNotZNCChannel { chan } {
 }
 
 proc debug:helpfunction:test { nick host handle text } {
+	global zncChannelName
         puthelp "PRIVMSG $nick :Channels: [join [channels] ,]"
-        puthelp "PRIVMSG $nick :[eggdrop:helpfunction:isNotZNCChannel "#ZNC" ]"
+        puthelp "PRIVMSG $nick :[eggdrop:helpfunction:isNotZNCChannel "$zncChannelName" ]"
 }
 
 proc debug:helpfunction:testchan { nick host handle chan text } {
@@ -891,16 +912,6 @@ proc znc:sendTo:user { command } {
         putquick "PRIVMSG $nick :To Connect to ZNC-Server use \"${username}:${password}\" as server-password"
 }
 
-proc mail:sendTo:user { from to subject content {cc "" } } {
-        global sendmailPath
-        set msg {From: Your_network_name FreeZNC <admin@example.com>}
-        append msg \n "To: " [join $to , ]
-        append msg \n "Cc: " [join $cc , ]
-        append msg \n "Subject: $subject"
-        append msg \n\n $content
-
-        exec $sendmailPath -oi -t << $msg
-}
 
 
 ### Commands - Functions ------------------------------------------------------

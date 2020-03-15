@@ -263,6 +263,7 @@ proc znc:request { nick host handle chan text } {
                         znc:helpfunction:loadModuleList $username $zncDefaultUserModules
 	                znc:controlpanel:AddNetwork $username $zncnetworkname
 	                znc:controlpanel:SetNetwork bindhost $username $zncnetworkname $vhost
+                        znc:controlpanel:Set RealName $username $username
 			mail:simply:sendUserRequest2 $username $password $vhost
                         if { $networkname != ""} {
                                 set preServer ""

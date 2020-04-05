@@ -11,7 +11,7 @@ set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
 set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
-set scriptversionUpdated "2.0"
+set scriptversionUpdated "2.1"
 set scriptdebug 0
 
 putlog "$scriptname loading configuration..."

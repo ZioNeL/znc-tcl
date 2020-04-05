@@ -1,4 +1,4 @@
-# znc.tcl
+# znc-tcl
 znc.tcl script for Free-znc
 To have this tcl working follow the following stepts:
 

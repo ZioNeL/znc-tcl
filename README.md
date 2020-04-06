@@ -1,5 +1,6 @@
-#
-# znc-tcl
+###########
+# znc-tcl #
+###########
 znc.tcl script v2.3 for Free-znc
 To have this tcl working follow the following stepts:
 

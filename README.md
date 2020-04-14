@@ -1,8 +1,8 @@
 ################
-# znc-tcl v2.3 #
+# znc-tcl v2.4 #
 ################
 
-znc.tcl script v2.3 for Free-znc
+znc.tcl script v2.4 for Free-znc
 To have this tcl working follow the following stepts:
 
 1. cd eggdrop_folder_name/scripts

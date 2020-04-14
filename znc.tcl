@@ -11,7 +11,7 @@ set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
 set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
-set scriptversionUpdated "2.3"
+set scriptversionUpdated "2.4"
 set scriptdebug 0
 
 putlog "$scriptname loading configuration..."
@@ -399,6 +399,12 @@ proc znc:noIdle {nick host handle chan text} {
         }
 }
 
+proc znc:lastseen {nick host handle chan text} {
+        global scriptCommandPrefix zncprefix partychan
+                znc:lastseen:show
+                znc:chatproc
+}
+
 proc znc:listUnconfirmed {nick host handle chan text} {
         global scriptCommandPrefix
         set UnConfirmedList [join [ userlist C ] ,]
@@ -674,6 +680,12 @@ proc znc:controlpanel:DelUser { username } {
         znc:sendTo:Controlpanel "DelUser $username"
 }
 
+proc znc:lastseen:show { {args "" } } {
+        if { $args == ""} {
+        znc:sendTo:lastseen "show"
+        }
+}
+
 proc znc:controlpanel:Disconnect { username network } {
         znc:sendTo:Controlpanel "Disconnect $username $network"
 }
@@ -902,6 +914,11 @@ proc znc:sendTo:Controlpanel { command } {
         putquick "PRIVMSG ${zncprefix}controlpanel :$command"
 }
 
+proc znc:sendTo:lastseen { command } {
+        global zncprefix
+        putquick "PRIVMSG ${zncprefix}lastseen :$command"
+}
+
 proc znc:sendTo:blockuser { command } {
 
         global zncprefix
@@ -986,6 +1003,12 @@ proc znc:MSG:noIdle {nick host handle text} {
         znc:noIdle $nick $host $handle $nick $text
 }
 
+## lastseen Commands
+proc znc:PUB:lastseen {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:lastseen $nick $host $handle $chan $text
+}
+
 ## ListUnconfirmedUsers Commands
 proc znc:PUB:listUnconfirmed {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
@@ -1016,6 +1039,11 @@ proc znc:MSG:vhosts {nick host handle text} {
         znc:vhosts $nick $host $handle $nick $text
 }
 
+proc znc:chatproc {nick host handle text} {
+ global botnick zncChannelName
+         putserv "NOTICE $zncChannelName :\002\[\002$text\002\]\002"
+}
+
 ### custom flags --------------------------------------------------------------
 
 ## ZNC Channel flag
@@ -1033,10 +1061,12 @@ bind PUB Q "${scriptCommandPrefix}chpass" znc:PUB:chpass
 bind PUB Y "${scriptCommandPrefix}Deny" znc:PUB:deny
 bind PUB Y "${scriptCommandPrefix}DelUser" znc:PUB:delUser
 bind PUB Y "${scriptCommandPrefix}noIdle" znc:PUB:noIdle
+bind PUB Y "${scriptCommandPrefix}lastseen" znc:PUB:lastseen
 bind PUB Y "${scriptCommandPrefix}ListUnconfirmedUsers" znc:PUB:listUnconfirmed
 bind PUB Y "${scriptCommandPrefix}LUU" znc:PUB:listUnconfirmed
 bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
 bind PUB - "${scriptCommandPrefix}vhosts" znc:PUB:vhosts
+bind msgm - * znc:chatproc
 
 ## private binds --------------------------------------------------------------
 bind MSG - "Request" znc:MSG:request

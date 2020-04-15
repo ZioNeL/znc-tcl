@@ -1042,7 +1042,7 @@ proc znc:MSG:vhosts {nick host handle text} {
 proc znc:chatproc {nick host handle text} {
 global botnick zncChannelName
 set bots [bots]
- if {[string match -nocase "*" $text]} {
+ if {[string match -nocase "*lastseen" $nick]} {
          putserv "NOTICE $zncChannelName :\002\[\002$text\002\]\002"
     }
 }

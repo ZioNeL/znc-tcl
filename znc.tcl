@@ -1040,8 +1040,11 @@ proc znc:MSG:vhosts {nick host handle text} {
 }
 
 proc znc:chatproc {nick host handle text} {
- global botnick zncChannelName
+global botnick zncChannelName
+set bots [bots]
+ if {[string match -nocase "*" $text]} {
          putserv "NOTICE $zncChannelName :\002\[\002$text\002\]\002"
+    }
 }
 
 ### custom flags --------------------------------------------------------------
@@ -1079,7 +1082,8 @@ bind MSG Y "noIdle" znc:MSG:noIdle
 bind MSG Y "ListUnconfirmedUsers" znc:MSG:listUnconfirmed
 bind MSG Y "LUU" znc:MSG:listUnconfirmed
 bind MSG - "help" znc:MSG:help
-#bind MSG - "vhosts" znc:MSG:vhosts
+bind MSG - "vhosts" znc:MSG:vhosts
+bind msgm f * znc:chatproc
 
 ## debug binds ----------------------------------------------------------------
 if {$scriptdebug} {

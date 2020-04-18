@@ -444,7 +444,7 @@ proc znc:Offline {requester host handle chan text} {
         set username [lindex $text 0]
 
         if {$username == "" } {
-                puthelp "NOTICE $requester :${scriptCommandPrefix}Offline syntax is \"${scriptCommandPrefix}Offline <username>\" for more please use \"${scriptCommandPrefix}help Offline
+                puthelp "NOTICE $requester :${scriptCommandPrefix}Offline syntax is \"${scriptCommandPrefix}Offline <username>\" for more please use \"${scriptCommandPrefix}help Offline"
         } elseif [ matchattr $username A ] {
                 chattr $username -A
                 puthelp "NOTICE $requester :Admin $username is now Offline."

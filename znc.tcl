@@ -415,6 +415,44 @@ proc znc:listUnconfirmed {nick host handle chan text} {
         }
 }
 
+proc znc:Admins {nick host handle chan text} {
+        global scriptCommandPrefix
+        set Admins [join [ userlist A ] ,]
+        if { $Admins != "" } {
+                puthelp "NOTICE $nick :Free-ZNC Admins: $Admins"
+        } else {
+                puthelp "NOTICE $nick :no Free-ZNC Admins are online at this moment! Please try again later!"
+        }
+}
+
+proc znc:Online {requester host handle chan text} {
+        global scriptCommandPrefix
+        set username [lindex $text 0]
+
+        if {$username == "" } {
+                puthelp "NOTICE $requester :${scriptCommandPrefix}Online syntax is \"${scriptCommandPrefix}Online <username>\" for more please use \"${scriptCommandPrefix}help Online"
+        } elseif [ matchattr $username QY] {
+                chattr $username +A
+                puthelp "NOTICE $requester :Admin $username is now Online."
+        } else {
+                puthelp "NOTICE $requester :$username does not have the right to be set as ONLINE or does not exist"
+        }
+}
+
+proc znc:Offline {requester host handle chan text} {
+        global scriptCommandPrefix
+        set username [lindex $text 0]
+
+        if {$username == "" } {
+                puthelp "NOTICE $requester :${scriptCommandPrefix}Offline syntax is \"${scriptCommandPrefix}Offline <username>\" for more please use \"${scriptCommandPrefix}help Offline
+        } elseif [ matchattr $username A ] {
+                chattr $username -A
+                puthelp "NOTICE $requester :Admin $username is now Offline."
+        } else {
+                puthelp "NOTICE $requester :$username does not have the right to be set as OFFLINE or does not exist"
+        }
+}
+
 proc znc:help {nick host handle chan text} {
         global scriptCommandPrefix zncAdminName scriptname botnick
         set helpcontext [lindex $text 0]
@@ -627,14 +665,18 @@ proc znc:help {nick host handle chan text} {
                 }
         } else {
                 puthelp "NOTICE $nick :#$scriptname Command list:"
-                puthelp "NOTICE $nick :#request                    |Requests an ZNC Account"
+                puthelp "NOTICE $nick :#request                 |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#ListUnconfirmedUsers    |Lists unconfirmed ZNC Account. Requires Admin Rights."
                 puthelp "NOTICE $nick :#Confirm                 |Confirms ZNC Account request. Requires Admin Rights."
-                puthelp "NOTICE $nick :#addvhost                 |Change host for ZNC Account. Requires Admin Rights."
-                puthelp "NOTICE $nick :#chpass                 |Change password for ZNC Account. Requires Admin Rights."
+                puthelp "NOTICE $nick :#addvhost                |Change host for ZNC Account. Requires Admin Rights."
+                puthelp "NOTICE $nick :#chpass                  |Change password for ZNC Account. Requires Admin Rights."
                 puthelp "NOTICE $nick :#Deny                    |Denies a ZNC Account request. Requires Admin Rights."
                 puthelp "NOTICE $nick :#DelUser                 |Deletes a confirmed ZNC Account. Requires Admin Rights."
-                puthelp "NOTICE $nick :#noIdle                 |Deletes a confirmed ZNC Account if the user didn't login for more than 15 days. Requires Admin Rights."
+                puthelp "NOTICE $nick :#noIdle                  |Deletes a confirmed ZNC Account if the user didn't login for more than 15 days. Requires Admin Rights."
+                puthelp "NOTICE $nick :#lastseen                |Shows the last connection time of the ZNC user. Lastseen module must be enabled on ZNC as admin. Requires Admin Rights."
+                puthelp "NOTICE $nick :#Admins                  |Shows current Free-ZNC Admins that are ONLINE"
+                puthelp "NOTICE $nick :#Online                  |Set A Free-ZNC Admin with Status ONLINE. Requires Admin Rights."
+                puthelp "NOTICE $nick :#Offline                 |Set A Free-ZNC Admin with Status OFFLINE. Requires Admin Rights."
                 puthelp "NOTICE $nick :#help                    |Shows help for commands"
                 puthelp "NOTICE $nick :# "
                 puthelp "NOTICE $nick :#Use \"${scriptCommandPrefix}help <command>\" for full helpcontext."
@@ -1019,6 +1061,25 @@ proc znc:MSG:listUnconfirmed {nick host handle text} {
         znc:listUnconfirmed $nick $host $handle $nick $text
 }
 
+## Admins Command
+proc znc:PUB:Admins {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:Admins $nick $host $handle $chan $text
+}
+
+## Online Command
+
+proc znc:PUB:Online {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:Online $nick $host $handle $chan $text
+}
+
+## OFFLINE Command
+proc znc:PUB:Offline {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:Offline $nick $host $handle $chan $text
+}
+
 ## Help Commands
 proc znc:PUB:help {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
@@ -1060,13 +1121,15 @@ bind PUB - "${scriptCommandPrefix}Request" znc:PUB:request
 bind PUB Y "${scriptCommandPrefix}Confirm" znc:PUB:confirm
 bind PUB Y "${scriptCommandPrefix}AddVhost" znc:PUB:addvhost
 bind PUB Q "${scriptCommandPrefix}chpass" znc:PUB:chpass
-
 bind PUB Y "${scriptCommandPrefix}Deny" znc:PUB:deny
 bind PUB Y "${scriptCommandPrefix}DelUser" znc:PUB:delUser
 bind PUB Y "${scriptCommandPrefix}noIdle" znc:PUB:noIdle
 bind PUB Y "${scriptCommandPrefix}lastseen" znc:PUB:lastseen
 bind PUB Y "${scriptCommandPrefix}ListUnconfirmedUsers" znc:PUB:listUnconfirmed
 bind PUB Y "${scriptCommandPrefix}LUU" znc:PUB:listUnconfirmed
+bind PUB - "${scriptCommandPrefix}Admins" znc:PUB:Admins
+bind PUB YQ "${scriptCommandPrefix}Online" znc:PUB:Online
+bind PUB YQ "${scriptCommandPrefix}Offline" znc:PUB:Offline
 bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
 bind PUB - "${scriptCommandPrefix}vhosts" znc:PUB:vhosts
 bind msgm - * znc:chatproc

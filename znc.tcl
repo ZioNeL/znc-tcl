@@ -416,12 +416,12 @@ proc znc:listUnconfirmed {nick host handle chan text} {
 }
 
 proc znc:Admins {nick host handle chan text} {
-        global scriptCommandPrefix
+        global scriptCommandPrefix zncRequestMail
         set Admins [join [ userlist A ] ,]
         if { $Admins != "" } {
                 puthelp "NOTICE $nick :Free-ZNC Admins: $Admins"
         } else {
-                puthelp "NOTICE $nick :no Free-ZNC Admins are online at this moment! Please try again later!"
+		puthelp "NOTICE $nick :no Free-ZNC Admins are online at this moment! Please try again later or send an e-mail to $zncRequestMail with your question or problem."
         }
 }
 
@@ -1156,7 +1156,7 @@ if {$scriptdebug} {
 
 
 ### End of Script -------------------------------------------------------------
-putlog "$scriptname version $scriptversion loaded"
+putlog "$scriptname version $scriptversion and upgraded to $scriptversionUpdated by $scriptUpdater loaded"
 
 
 

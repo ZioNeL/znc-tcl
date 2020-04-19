@@ -1108,6 +1108,16 @@ set bots [bots]
     }
 }
 
+proc joinnotice {noticenick noticehost noticehandle noticechan} {
+global zncChannelName zncnetworkname
+   putserv "NOTICE $noticenick :Welcome To $zncChannelName on $zncnetworkname Network."
+   putserv "NOTICE $noticenick :Please type \002\00304!vhosts\003\002 in order to see the available vhosts before you request a Free-ZNC on $zncnetworkname."
+   putserv "NOTICE $noticenick :Please type \002\00304!request\003\002 in order to request a free-znc !"
+   putserv "NOTICE $noticenick :Use only the vhosts provided in \002\00304!vhosts\003\002 command in order to have your ZNC request \002\00303ACCEPTED\003\002 , if NOT your request will be \002\00304REJECTE$
+   putserv "NOTICE $noticenick :Free-ZNC Admins will gladly help you if needed. To check if an admin is ONLINE, please type \002\00304!admins\003\002 command in $zncChannelName."
+   putserv "NOTICE $noticenick :Thank you for joining $zncnetworkname Network. Enjoy your stay in here!"
+}
+
 ### custom flags --------------------------------------------------------------
 
 ## ZNC Channel flag
@@ -1133,6 +1143,7 @@ bind PUB YQ "${scriptCommandPrefix}Offline" znc:PUB:Offline
 bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
 bind PUB - "${scriptCommandPrefix}vhosts" znc:PUB:vhosts
 bind msgm - * znc:chatproc
+bind join -|- * joinnotice
 
 ## private binds --------------------------------------------------------------
 bind MSG - "Request" znc:MSG:request

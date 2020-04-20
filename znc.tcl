@@ -1101,12 +1101,16 @@ proc znc:MSG:vhosts {nick host handle text} {
 }
 
 proc znc:chatproc {nick host handle text} {
-global botnick zncChannelName
+global botnick zncChannelName  requestlastseen
 set bots [bots]
- if {[string match -nocase "*lastseen" $nick]} {
-         putserv "NOTICE $zncChannelName :\002\[\002$text\002\]\002"
+ if {[string match -nocase "*lastseen" $nick] } {
+        foreach u [userlist A] {
+        set nick2 [hand2nick $u]
+         putserv "NOTICE $nick2 :\002\[\002$text\002\]\002"
+        }
     }
 }
+
 
 proc joinnotice {noticenick noticehost noticehandle noticechan} {
 global zncChannelName zncnetworkname

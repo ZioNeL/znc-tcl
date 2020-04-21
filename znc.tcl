@@ -2,7 +2,7 @@
 ### Preconfiguration please don't change...
 ### Script Logic ## Handle with care!
 ###############################################################################
-set scriptname "Shivering-Isles ZNC managment script"
+set scriptname "Free ZNC management script"
 set scriptOwner "Christoph Kern"
 set scriptOwnerMail "Sheogorath@shivering-isles.de"
 set scriptUpdater "ZioN"
@@ -679,6 +679,7 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Online                |Set A Free-ZNC Admin with Status ONLINE. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Offline               |Set A Free-ZNC Admin with Status OFFLINE. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Admins                |Shows current Free-ZNC Admins that are ONLINE"
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Vhosts                |Shows the available vhosts for \002\00304!request\003\002 command."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}help                  |Shows help for commands"
                 puthelp "NOTICE $nick :#"
                 puthelp "NOTICE $nick :#Use\"${scriptCommandPrefix}help <command>\" for full helpcontext."
@@ -700,6 +701,7 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#$scriptname Command list:"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request                 |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Admins                  |Shows current Free-ZNC Admins that are ONLINE"
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Vhosts                  |Shows the available vhosts for \002\00304!request\003\002 command."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}help                    |Shows help for commands"
                 puthelp "NOTICE $nick :#"
                 puthelp "NOTICE $nick :#Use\"${scriptCommandPrefix}help <command>\" for full helpcontext."

@@ -674,6 +674,7 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#DelUser                 |Deletes a confirmed ZNC Account. Requires Admin Rights."
                 puthelp "NOTICE $nick :#noIdle                  |Deletes a confirmed ZNC Account if the user didn't login for more than 15 days. Requires Admin Rights."
                 puthelp "NOTICE $nick :#lastseen                |Shows the last connection time of the ZNC user. Lastseen module must be enabled on ZNC as admin. Requires Admin Rights."
+								|!online command must be issued before using lastseen.
                 puthelp "NOTICE $nick :#Admins                  |Shows current Free-ZNC Admins that are ONLINE"
                 puthelp "NOTICE $nick :#Online                  |Set A Free-ZNC Admin with Status ONLINE. Requires Admin Rights."
                 puthelp "NOTICE $nick :#Offline                 |Set A Free-ZNC Admin with Status OFFLINE. Requires Admin Rights."

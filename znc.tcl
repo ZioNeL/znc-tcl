@@ -901,7 +901,7 @@ proc mail:simply:sendUserRequest2 { username password vhost } {
 
 
 proc mail:simply:sendUserRequest { username password } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail 
+        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
         set email [getuser $username COMMENT]
         set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
         append content \n "Your ZNC Connection Host is: $znchost\n"
@@ -915,6 +915,8 @@ proc mail:simply:sendUserRequest { username password } {
         append content \n "Your ZNC Username is: $username"
         append content \n "Your ZNC Password is: $password"
         append content \n "To connect to your ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} ${password}"
+        append content \n\n "Please Keep in mind that the ZNC account will be automatically DELETED if you DO NOT LOGIN on to your ZNC account for more then 25 DAYS !!!"
+        append content \n\n "Thank you and Enjoy $zncnetworkname !!!"
 #       if { $zncWebNonSSLPort != "" } {
 #       append content \n "To login via NON-SSL-Webinterface goto: http://${znchost}:${zncWebNonSSLPort}"
 #       }
@@ -941,13 +943,14 @@ proc mail:simply:sendUserDeny { username } {
 proc mail:simply:sendUserDel { username } {
         global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
         set email [getuser $username COMMENT]
-        set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
+        set content "Hey $username,\n The request to delete your ZNC-Account hosted by $zncnetworkname is now COMPLETED !!!\n"
         append content \n "Your Free-ZNC account was deleted.\n"
         if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact $zncAdminMail"
+        append content \n\n\n\n "If the request didn't came from you or want to place a complaint regarding this action please contact $zncAdminMail"
         }
         mail:simply:send $email "ZNC-Account Deleted at $zncnetworkname" $content
 }
+
 
 proc mail:simply:sendUsernoIdle { username } {
         global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail

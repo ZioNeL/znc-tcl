@@ -254,7 +254,6 @@ proc znc:request { nick host handle chan text } {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}request <zncusername> <e-mail-address> <vhost> \" for more please use \"${scriptCommandPrefix}help request" 
                 return
         } else {
-                set password [znc:helpfunction:generatePassword  $zncPasswordSecurityLevel $zncPasswordLength ]
                 if [ adduser $username ] {
                         setuser $username COMMENT $email
                         chattr $username +ZC
@@ -264,7 +263,7 @@ proc znc:request { nick host handle chan text } {
 	                znc:controlpanel:AddNetwork $username $zncnetworkname
 	                znc:controlpanel:SetNetwork bindhost $username $zncnetworkname $vhost
                         znc:controlpanel:Set RealName $username $username
-			mail:simply:sendUserRequest2 $username $password $vhost
+			mail:simply:sendUserRequest2 $username $vhost
                         if { $networkname != ""} {
                                 set preServer ""
                                 if { $usePreconfiguredNetworks } {
@@ -883,13 +882,12 @@ proc mail:simply:send2 { usermail subject content } {
         mail:sendTo:user2 $zncRequestMail $usermail $subject $content
 }
 
-proc mail:simply:sendUserRequest2 { username password vhost } {
+proc mail:simply:sendUserRequest2 { username vhost } {
         global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail zncRequestMail zncnetworkname
         set email [getuser $username COMMENT]
         set content "Hello!!! \n $username requested a FREE ZNC-Account hosted by $zncnetworkname\n"
         append content \n "ZNC Connection Port is: $zncNonSSLPort"
         append content \n "ZNC Username is: $username"
-        append content \n "ZNC Password is: $password"
         append content \n "ZNC vhost set is: $vhost"
         append content \n "If all the data is ok please proceed and confirm the request using: !confirm $username , else please deny the request using : !deny $username"
         append content \n "The user will be able to connect to his ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} ${password}"

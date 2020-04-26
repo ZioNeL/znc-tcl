@@ -254,7 +254,7 @@ proc znc:request { nick host handle chan text } {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}request <zncusername> <e-mail-address> <vhost> \" for more please use \"${scriptCommandPrefix}help request" 
                 return
         } else {
-	                set password [znc:helpfunction:generatePassword $zncPasswordSecurityLevel $zncPasswordLength ]
+	        set password [znc:helpfunction:generatePassword $zncPasswordSecurityLevel $zncPasswordLength ]
                 if [ adduser $username ] {
                         setuser $username COMMENT $email
                         chattr $username +ZC
@@ -891,7 +891,6 @@ proc mail:simply:sendUserRequest2 { username vhost } {
         append content \n "ZNC Username is: $username"
         append content \n "ZNC vhost set is: $vhost"
         append content \n "If all the data is ok please proceed and confirm the request using: !confirm $username , else please deny the request using : !deny $username"
-        append content \n "The user will be able to connect to his ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} ${password}"
         if { $zncRequestMail != "" } {
         append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
         }

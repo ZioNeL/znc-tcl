@@ -254,6 +254,7 @@ proc znc:request { nick host handle chan text } {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}request <zncusername> <e-mail-address> <vhost> \" for more please use \"${scriptCommandPrefix}help request" 
                 return
         } else {
+	                set password [znc:helpfunction:generatePassword $zncPasswordSecurityLevel $zncPasswordLength ]
                 if [ adduser $username ] {
                         setuser $username COMMENT $email
                         chattr $username +ZC

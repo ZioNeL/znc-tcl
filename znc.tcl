@@ -298,6 +298,7 @@ proc znc:confirm {requester host handle chan text} {
                 set password [znc:helpfunction:generatePassword $zncPasswordSecurityLevel $zncPasswordLength ]
                 znc:controlpanel:Set "password" $username $password
                 mail:simply:sendUserRequest $username $password
+		mail:simply:sendUserRequest3 $username $password
                 znc:blockuser:unblock $username
                 chattr $username -C
                 puthelp "NOTICE $requester :$username is now confirmed."
@@ -926,6 +927,22 @@ proc mail:simply:sendUserRequest { username password } {
         }
         mail:simply:send $email "Free-ZNC-Account Request at $zncnetworkname" $content
 }
+
+proc mail:simply:sendUserRequest3 { username password } {
+        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail zncRequestMail
+        set email [getuser $username COMMENT]
+        set content "Hello!!! \n $username request for a FREE ZNC-Account hosted by $zncnetworkname was confirmed !!! \n"
+        append content \n "ZNC Connection Port is: $zncNonSSLPort"
+        append content \n "ZNC Username is: $username"
+        append content \n "ZNC password set is: $password"
+        append content \n "ZNC requester e-mail address is: $email"
+        append content \n\n "An e-mail with login data and instructions was sent also to requester`s e-mail address : $email."
+        if { $zncRequestMail != "" } {
+        append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
+        }
+        mail:simply:send $zncRequestMail  "$username Request ZNC-Account at $zncnetworkname was confirmed" $content
+}
+
 
 proc mail:simply:sendUserDeny { username } {
         global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail

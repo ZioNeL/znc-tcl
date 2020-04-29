@@ -1169,6 +1169,44 @@ global zncChannelName zncnetworkname
     }
 }
 
+proc status:cmd {nick host hand chan arg} {
+        set ip [lindex [split $arg] 0]
+if {$ip == ""} {
+        putserv "NOTICE $nick :Foloseste !check <vhost>"
+        return
+}
+        set to_much 0
+        set ips ""
+        set ips_out ""
+        set out [exec netstat -antu | grep :6667 | grep -v LISTEN | tr -s " " | cut -d " " -f5 | cut -d: -f1 | sort | uniq -c]
+        set split_out [split [concat $out] "\n"]
+        set c 0
+foreach i $split_out {
+        set line [concat $i]
+        set split_i [split $line " "]
+        set nr [lindex $split_i 0]
+        set the_ip [lindex $split_i 1]
+if {[string match -nocase $ip $the_ip]} {
+if {$nr > 2} {
+        set to_much 1
+        break
+                }
+        lappend ips_out "\#$nr $the_ip"
+        }
+#       putlog $ips_out
+}
+if {$to_much == "1"} {
+        putserv "NOTICE $nick :$the_ip are deja 3 conexiuni, te rog alege alt vhost"
+        return
+        }
+if {$ips_out == ""} {
+        putserv "NOTICE $nick :Pentru $ip nu am gasit nicio conexiune."
+        return
+        }
+#       putserv "NOTICE $nick :[join $ips_out ", "]"
+        putserv "NOTICE $nick :$ip are $nr conexiuni."
+}
+
 ### custom flags --------------------------------------------------------------
 
 ## ZNC Channel flag
@@ -1195,6 +1233,7 @@ bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
 bind PUB - "${scriptCommandPrefix}vhosts" znc:PUB:vhosts
 bind msgm - * znc:chatproc
 bind join -|- * joinnotice
+bind pub - !check status:cmd
 
 ## private binds --------------------------------------------------------------
 bind MSG - "Request" znc:MSG:request

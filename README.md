@@ -1,6 +1,6 @@
 
 ################
-# znc-tcl v2.5 #
+# znc-tcl v2.5 # - No vhosts are implemented on this script.
 ################
 
 znc.tcl script v2.5 for Free-znc

@@ -684,7 +684,6 @@ proc znc:help {nick host handle chan text} {
                	puthelp "NOTICE $nick :#${scriptCommandPrefix}Online                |Set A Free-ZNC Admin with Status ONLINE. \002\00304Requires Admin Rights\003\002." 
                	puthelp "NOTICE $nick :#${scriptCommandPrefix}Offline               |Set A Free-ZNC Admin with Status OFFLINE. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Admins                |Shows current Free-ZNC Admins that are ONLINE"
-                puthelp "NOTICE $nick :#${scriptCommandPrefix}Vhosts                |Shows the available vhosts for \002\00304!request\003\002 command."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}help                  |Shows help for commands"
                 puthelp "NOTICE $nick :#"
                 puthelp "NOTICE $nick :#Use\"${scriptCommandPrefix}help <command>\" for full helpcontext."
@@ -706,7 +705,6 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#$scriptname Command list:"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request                 |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Admins                  |Shows current Free-ZNC Admins that are ONLINE"
-                puthelp "NOTICE $nick :#${scriptCommandPrefix}Vhosts                  |Shows the available vhosts for \002\00304!request\003\002 command."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}help                    |Shows help for commands"
                 puthelp "NOTICE $nick :#"
                 puthelp "NOTICE $nick :#Use\"${scriptCommandPrefix}help <command>\" for full helpcontext."
@@ -907,12 +905,6 @@ proc mail:simply:sendUserRequest { username password } {
         set email [getuser $username COMMENT]
         set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
         append content \n "Your ZNC Connection Host is: $znchost\n"
-#       if { $zncNonSSLPort != "" } {
-#       append content \n "To connect your IRC Client via NON-SSL connect to: ${znchost}:${zncNonSSLPort}"
-#       }
-#       if { $zncSSLPort != "" } {
-#       append content \n "To connect your IRC Client via SSL connect to: ${znchost}:${zncSSLPort}"
-#       }
         append content \n "Your ZNC Connection Port is: $zncNonSSLPort"
         append content \n "Your ZNC Username is: $username"
         append content \n "Your ZNC Password is: $password"
@@ -1127,16 +1119,6 @@ proc znc:MSG:help {nick host handle text} {
         znc:help $nick $host $handle $nick $text
 }
 
-## Vhosts List Commands
-proc znc:PUB:vhosts {nick host handle chan text} {
-        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
-        znc:vhosts $nick $host $handle $chan $text
-}
-
-proc znc:MSG:vhosts {nick host handle text} {
-        znc:vhosts $nick $host $handle $nick $text
-}
-
 proc znc:chatproc {nick host handle text} {
 global botnick zncChannelName  requestlastseen
 set bots [bots]
@@ -1144,7 +1126,6 @@ set bots [bots]
 	foreach u [userlist A] {
 	set nick2 [hand2nick $u]
          putserv "NOTICE $nick2 :\002\[\002$text\002\]\002"
-#         putlog "$handle :\002\[\002$handle\002\]\002$text"
 	}
     }
 }
@@ -1153,9 +1134,7 @@ proc joinnotice {noticenick noticehost noticehandle noticechan} {
 global zncChannelName zncnetworkname
  if { $noticechan == $::zncChannelName } {
    putserv "NOTICE $noticenick :Welcome To $zncChannelName on $zncnetworkname Network."
-   putserv "NOTICE $noticenick :Please type \002\00304!vhosts\003\002 in order to see the available vhosts before you request a Free-ZNC on $zncnetworkname."
    putserv "NOTICE $noticenick :Please type \002\00304!request\003\002 in order to request a free-znc !"
-   putserv "NOTICE $noticenick :Use only the vhosts provided in \002\00304!vhosts\003\002 command in order to have your ZNC request \002\00303ACCEPTED\003\002 , if NOT your request will be \002\00304REJECTED\003\002 !!"
    putserv "NOTICE $noticenick :Free-ZNC Admins will gladly help you if needed. To check if an admin is ONLINE, please type \002\00304!admins\003\002 command in $zncChannelName."
    putserv "NOTICE $noticenick :Thank you for joining $zncnetworkname Network. Enjoy your stay in here!"
     }
@@ -1241,7 +1220,6 @@ bind MSG Y "noIdle" znc:MSG:noIdle
 bind MSG Y "ListUnconfirmedUsers" znc:MSG:listUnconfirmed
 bind MSG Y "LUU" znc:MSG:listUnconfirmed
 bind MSG - "help" znc:MSG:help
-#bind MSG - "vhosts" znc:MSG:vhosts
 
 ## debug binds ----------------------------------------------------------------
 if {$scriptdebug} {

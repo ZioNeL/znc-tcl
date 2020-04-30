@@ -2,14 +2,14 @@
 ### Preconfiguration please don't change...
 ### Script Logic ## Handle with care!
 ###############################################################################
-set scriptname "Free ZNC Management script"
+set scriptname "Free ZNC management script"
 set scriptOwner "Christoph Kern"
 set scriptOwnerMail "Sheogorath@shivering-isles.de"
 set scriptUpdater "ZioN"
 set scriptUpdaterMail "zion@universalnet.org"
 set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
-set scriptUpdaterNetwork "UniversalNet"
+set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
 set scriptversionUpdated "2.5"
 set scriptdebug 0
@@ -51,7 +51,7 @@ set sendmailPath "/usr/sbin/sendmail"
 ###----------------------------------------------------------------------------
 
 ## ZNC Network name
-set zncnetworkname "UniversalNet"
+set zncnetworkname "your_Network_name"
 
 ## Server Port name
 #set port "6667"
@@ -63,26 +63,26 @@ set zncnetworkname "UniversalNet"
 set zncprefix "*"
 
 ## The DNS-Host of your ZNC Server
-set znchost "znc.universalnet.org"
+set znchost "hostname_or_ip_of_znc_server"
 
 ## The ZNC NON-SSL Port, if not exists set ""
-set zncNonSSLPort "3124"
+set zncNonSSLPort "1234"
 
 ## The ZNC SSL Port, if not exists set ""
 set zncSSLPort ""
 
 ## The ZNC-Webinterface NON-SSL Port, if not exists set ""
-set zncWebNonSSLPort "3124"
+set zncWebNonSSLPort "1234"
 
 ## The ZNC-Webinterface SSL Port, if not exists set ""
 set zncWebSSLPort ""
 
 ## The Name of server support/admin
-set zncAdminName "ZioN"
+set zncAdminName "Name_of_ZNC_Admin"
 
 ## The E-Mail address of server support/admin
-set zncAdminMail "zion@universalnet.org"
-set zncRequestMail "znc@universalnet.org"
+set zncAdminMail "znc-admin@example.org"
+set zncRequestMail "znc-request@example.org"
 
 ## Define the ZNC Vhosts Here. Please Keep in mind that these VHOSTS must be UP on server`s network interfaces first !!! 
 set vhost {
@@ -99,7 +99,7 @@ set vhost {
 }
 
 ## The ZNC IRC Server
-set zncircserver "10.0.1.1"
+set zncircserver "irc.example.org"
 set zncircserverport "6667"
 set zncChannelName "#ZNC"
 

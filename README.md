@@ -1,7 +1,7 @@
 
-################
-# znc-tcl v2.5 #
-################
+################################################
+# znc-tcl v2.5 with vhost auto addition . #
+################################################
 
 znc.tcl script v2.5 for Free-znc
 To have this tcl working follow the following stepts:

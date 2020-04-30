@@ -1170,6 +1170,7 @@ global zncChannelName zncnetworkname
 }
 
 proc status:cmd {nick host hand chan arg} {
+global zncircserverport
         set ip [lindex [split $arg] 0]
 if {$ip == ""} {
         putserv "NOTICE $nick :Foloseste !check <vhost>"
@@ -1178,7 +1179,7 @@ if {$ip == ""} {
         set to_much 0
         set ips ""
         set ips_out ""
-        set out [exec netstat -antu | grep :6667 | grep -v LISTEN | tr -s " " | cut -d " " -f5 | cut -d: -f1 | sort | uniq -c]
+        set out [exec netstat -antu | grep :$zncircserverport | grep -v LISTEN | tr -s " " | cut -d " " -f5 | cut -d: -f1 | sort | uniq -c]
         set split_out [split [concat $out] "\n"]
         set c 0
 foreach i $split_out {

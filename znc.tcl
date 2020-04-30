@@ -246,21 +246,10 @@ if { $scriptdebug } {
 
 ### Bot Commands --------------------------------------------------------------
 
-proc znc:vhosts { nick host handle chan text } {
-        global scriptCommandPrefix
-        set vhosts [lindex $text 0]
-        if {$vhosts == "" } {
-                puthelp "NOTICE $nick :#ZNC Vhosts available are:"
-                puthelp "NOTICE $nick :10.0.1.2 , 10.0.1.3, 10.0.1.4 , 10.0.1.5 , 10.0.1.6" 
-                puthelp "NOTICE $nick :10.0.1.7 , 10.0.1.8, 10.0.1.9 , 10.0.1.10 , 10.0.1.11"
-        }
-}
-
 proc znc:request { nick host handle chan text } {
         global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength zncnetworkname zncDefaultUserModules zncDefaultNetworkModules usePreconfiguredNetworks zncnetworkname vhost
         set username [lindex $text 0]
         set email [lindex $text 1]
-#        set vhost [lindex $text 2]
         set server [lindex $text 2]
         set port [lindex $text 3]
         set networkname [lindex $text 4]
@@ -278,7 +267,6 @@ proc znc:request { nick host handle chan text } {
                         znc:blockuser:block $username
                         znc:helpfunction:loadModuleList $username $zncDefaultUserModules
 	                znc:controlpanel:AddNetwork $username $zncnetworkname
-#	                znc:controlpanel:SetNetwork bindhost $username $zncnetworkname $vhost
                         znc:controlpanel:Set bindhost $username [lindex $vhost [rand [llength $vhost]]]
                         znc:controlpanel:Set RealName $username $username
 			mail:simply:sendUserRequest2 $username $password $vhost
@@ -322,7 +310,6 @@ proc znc:confirm {requester host handle chan text} {
                 puthelp "NOTICE $requester :To Connect to ZNC-Server use as IDENT ${username} and \"${password}\" as server-password"
                 znc:controlpanel:AddServer $username $zncnetworkname $zncircserver:$zncircserverport
                 znc:controlpanel:AddChan $username $zncnetworkname $zncChannelName
-#               znc:controlpanel:Reconnect $username $zncnetworkname
         } elseif [ validuser $username ] {
                 puthelp "NOTICE $requester :$username is already confirmed."
         } else {
@@ -932,12 +919,6 @@ proc mail:simply:sendUserRequest { username password } {
         append content \n "To connect to your ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} ${password}"
         append content \n\n "Please Keep in mind that the ZNC account will be automatically DELETED if you DO NOT LOGIN on to your ZNC account for more then 25 DAYS !!!"
         append content \n\n "Thank you and Enjoy $zncnetworkname !!!"
-#       if { $zncWebNonSSLPort != "" } {
-#       append content \n "To login via NON-SSL-Webinterface goto: http://${znchost}:${zncWebNonSSLPort}"
-#       }
-#       if { $zncWebSSLPort != "" } {
-#       append content \n "To login via SSL-Webinterface goto: https://${znchost}:${zncWebSSLPort}"
-#       }
         if { $zncAdminMail != "" } {
         append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
         }
@@ -1072,10 +1053,7 @@ proc znc:PUB:chpass {nick host handle chan text} {
 }
 
 proc znc:MSG:chpass {nick host handle text} {
-#        set username [lindex $text 0]
-#        set newpass [lindex $text 1]
         znc:chpass $nick $host $handle $text
-#        znc:controlpanel:Set password $username $newpass
 }
 
 ## Deny Commands
@@ -1248,8 +1226,6 @@ bind PUB - "${scriptCommandPrefix}Admins" znc:PUB:Admins
 bind PUB YQ "${scriptCommandPrefix}Online" znc:PUB:Online
 bind PUB YQ "${scriptCommandPrefix}Offline" znc:PUB:Offline
 bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
-bind PUB - "${scriptCommandPrefix}vhosts" znc:PUB:vhosts
-
 bind msgm f * znc:chatproc
 bind join -|- * joinnotice
 bind pub - !check status:cmd

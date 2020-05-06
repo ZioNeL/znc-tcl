@@ -114,11 +114,11 @@ set zncPasswordLength 16
 ###----------------------------------------------------------------------------
 
 ## Default User Modules loaded, if not exists set { } if you use arguments do it like that: "autoreply \"I'll be back soon\""
-set defaultUserModules { "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
+set defaultUserModules { "lastseen" "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
 set zncDefaultUserModules {  }
 
 ## Default User Modules loaded, if not exists set { } if you use arguments do it like that: "autoreply \"I'll be back soon\""
-set defaultUserModules { "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
+set defaultUserModules { "lastseen" "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
 set zncDefaultNetworkModules {  }
 
 ### Preconfigured Networks

@@ -684,6 +684,7 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request               |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}ListUnconfirmedUsers  |Lists unconfirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Confirm               |Confirms ZNC Account request. \002\00304Requires Admin Rights\003\002."
+		puthelp "NOTICE $nick :#${scriptCommandPrefix}chemail               |Change e-mail address for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}addvhost              |Change host for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#/msg $botnick chpass        |Change password for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Deny                  |Denies a ZNC Account request. \002\00304Requires Admin Rights\003\002."

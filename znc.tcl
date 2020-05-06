@@ -302,6 +302,21 @@ proc znc:confirm {requester host handle chan text} {
         }
 }
 
+proc znc:chemail { nick host handle chan text } {
+        global scriptCommandPrefix zncnetworkname
+        set username [lindex $text 0]
+        set email [lindex $text 1]
+        if { $username == "" || $email == "" } {
+                puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}chemail <zncusername> <e-mail-address>\" for more please use \"${scriptCommandPrefix}help chemail"
+                return
+        } else {
+                if [ validuser $username ] {
+                        setuser $username COMMENT $email
+                puthelp "NOTICE $nick :E-mail address for ZNC Account is now changed to $email"
+                }
+        }
+}
+
 proc znc:chpass {nick host handle text} {
 #        global scriptCommandPrefix
         set username [lindex $text 0]
@@ -619,6 +634,7 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request               |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}ListUnconfirmedUsers  |Lists unconfirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Confirm               |Confirms ZNC Account request. \002\00304Requires Admin Rights\003\002."
+		puthelp "NOTICE $nick :#${scriptCommandPrefix}chemail               |Change e-mail address for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#/msg $botnick chpass        |Change password for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Deny                  |Denies a ZNC Account request. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}DelUser               |Deletes a confirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
@@ -975,6 +991,16 @@ proc znc:MSG:confirm { requester nick host handle text} {
         znc:confirm $requester $nick $host $handle $nick $text
 }
 
+## Chemail Commands
+proc znc:PUB:chemail {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:chemail $nick $host $handle $chan $text
+}
+
+proc znc:MSG:chemail {nick host handle text} {
+        znc:chemail $nick $host $handle $nick $text
+}
+
 ## chpass Commands
 proc znc:PUB:chpass {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
@@ -1131,7 +1157,7 @@ setudef flag znc
 ## public binds ---------------------------------------------------------------
 bind PUB - "${scriptCommandPrefix}Request" znc:PUB:request
 bind PUB Y "${scriptCommandPrefix}Confirm" znc:PUB:confirm
-bind PUB Y "${scriptCommandPrefix}AddVhost" znc:PUB:addvhost
+bind PUB Y "${scriptCommandPrefix}chemail" znc:PUB:chemail
 bind PUB Q "${scriptCommandPrefix}chpass" znc:PUB:chpass
 bind PUB Y "${scriptCommandPrefix}Deny" znc:PUB:deny
 bind PUB Y "${scriptCommandPrefix}DelUser" znc:PUB:delUser
@@ -1150,7 +1176,7 @@ bind pub - !check status:cmd
 ## private binds --------------------------------------------------------------
 bind MSG - "Request" znc:MSG:request
 bind MSG Y "Confirm" znc:MSG:confirm
-bind MSG Y "AddVhost" znc:MSG:addvhost
+bind MSG Y "chemail" znc:MSG:chemail
 bind MSG Q "chpass" znc:MSG:chpass
 bind MSG Y "Deny" znc:MSG:deny
 bind MSG Y "DelUser" znc:MSG:delUser

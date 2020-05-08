@@ -11,7 +11,7 @@ set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
 set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
-set scriptversionUpdated "2.5"
+set scriptversionUpdated "2.5.1"
 set scriptdebug 0
 
 putlog "$scriptname loading configuration..."
@@ -471,6 +471,11 @@ proc znc:Offline {requester host handle chan text} {
         } else {
                 puthelp "NOTICE $requester :$username does not have the right to be set as OFFLINE or does not exist"
         }
+}
+
+proc znc:version {nick host handle chan text} {
+        global scriptCommandPrefix scriptversionUpdated scriptUpdater
+                puthelp "NOTICE $nick :Free ZNC script version is $scriptversionUpdated by $scriptUpdater"
 }
 
 proc znc:help {nick host handle chan text} {
@@ -1145,6 +1150,16 @@ proc znc:MSG:help {nick host handle text} {
         znc:help $nick $host $handle $nick $text
 }
 
+## version Commands
+proc znc:PUB:version {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:version $nick $host $handle $chan $text
+}
+
+proc znc:MSG:version {nick host handle text} {
+        znc:version $nick $host $handle $nick $text
+}
+
 proc znc:chatproc {nick host handle text} {
 global botnick zncChannelName  requestlastseen
 set bots [bots]
@@ -1232,6 +1247,8 @@ bind PUB - "${scriptCommandPrefix}Admins" znc:PUB:Admins
 bind PUB YQ "${scriptCommandPrefix}Online" znc:PUB:Online
 bind PUB YQ "${scriptCommandPrefix}Offline" znc:PUB:Offline
 bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
+bind PUB - "${scriptCommandPrefix}version" znc:PUB:version
+
 bind msgm f * znc:chatproc
 bind join -|- * joinnotice
 bind pub - !check status:cmd
@@ -1248,6 +1265,7 @@ bind MSG Y "noIdle" znc:MSG:noIdle
 bind MSG Y "ListUnconfirmedUsers" znc:MSG:listUnconfirmed
 bind MSG Y "LUU" znc:MSG:listUnconfirmed
 bind MSG - "help" znc:MSG:help
+bind MSG - "version" znc:MSG:version
 
 ## debug binds ----------------------------------------------------------------
 if {$scriptdebug} {

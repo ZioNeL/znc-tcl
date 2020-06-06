@@ -11,7 +11,7 @@ set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
 set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
-set scriptversionUpdated "2.5"
+set scriptversionUpdated "2.5.2"
 set scriptdebug 0
 
 putlog "$scriptname loading configuration..."
@@ -634,7 +634,7 @@ proc znc:help {nick host handle chan text} {
                         }
                 }
         } else {
-                if {[matchattr $nick YQ]} {
+                if {[matchattr $nick Q]} {
                 puthelp "NOTICE $nick :#$scriptname Command list available for ADMINS:"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request               |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}ListUnconfirmedUsers  |Lists unconfirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
@@ -666,6 +666,39 @@ proc znc:help {nick host handle chan text} {
                         puthelp "NOTICE $nick :#   /msg $botnick help request"
                 }
                 puthelp "NOTICE $nick :### End of Help ###"
+                } elseif [matchattr $nick Y] {
+                puthelp "NOTICE $nick :#$scriptname Command list available for ADMINS:"
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}request               |Requests an ZNC Account"
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}ListUnconfirmedUsers  |Lists unconfirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Confirm               |Confirms ZNC Account request. \002\00304Requires Admin Rights\003\002."
+		puthelp "NOTICE $nick :#${scriptCommandPrefix}chemail               |Change e-mail address for ZNC Account. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}addvhost              |Change host for ZNC Account. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Deny                  |Denies a ZNC Account request. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}DelUser               |Deletes a confirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}noIdle                |Deletes a confirmed ZNC Account if the user didn't login for more than 15 days. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}lastseen              |Shows the last connection time of the ZNC user. Lastseen module must be enabled on ZNC as admin. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#                       |\002\00304!online\003\002 command must be issued before using \002\00304!lastseen\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Online                |Set A Free-ZNC Admin with Status ONLINE. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Offline               |Set A Free-ZNC Admin with Status OFFLINE. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Admins                |Shows current Free-ZNC Admins that are ONLINE"
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}Vhosts                |Shows the available vhosts for \002\00304!request\003\002 command."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}help                  |Shows help for commands"
+                puthelp "NOTICE $nick :#"
+                puthelp "NOTICE $nick :#Use\"${scriptCommandPrefix}help <command>\" for full helpcontext."
+                puthelp "NOTICE $nick :#"
+                puthelp "NOTICE $nick :#-----------------"
+                if { $chan != $nick } {
+                        puthelp "NOTICE $nick :#Syntax:"
+                        puthelp "NOTICE $nick :#   ${scriptCommandPrefix}help \[<command>\]"
+                        puthelp "NOTICE $nick :#Example:"
+                        puthelp "NOTICE $nick :#   ${scriptCommandPrefix}help request"
+                } else {
+                        puthelp "NOTICE $nick :#Syntax:"
+                        puthelp "NOTICE $nick :#   /msg $botnick help \[<command>\]"
+                        puthelp "NOTICE $nick :#Example:"
+                        puthelp "NOTICE $nick :#   /msg $botnick help request"
+                }
+                puthelp "NOTICE $nick :### End of Help ###"		
         } else {
                 puthelp "NOTICE $nick :#$scriptname Command list:"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request                 |Requests an ZNC Account"

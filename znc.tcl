@@ -689,7 +689,7 @@ proc znc:help {nick host handle chan text} {
                         }
                 }
         } else {
-		if {[matchattr $nick YQ]} {
+		if {[matchattr $nick Q]} {
                 puthelp "NOTICE $nick :#$scriptname Command list available for ADMINS:"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request               |Requests an ZNC Account"
        	        puthelp "NOTICE $nick :#${scriptCommandPrefix}ListUnconfirmedUsers  |Lists unconfirmed ZNC Account. \002\00304Requires Admin Rights\003\002."

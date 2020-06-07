@@ -11,7 +11,7 @@ set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
 set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
-set scriptversionUpdated "2.5.2"
+set scriptversionUpdated "2.5.3"
 set scriptdebug 0
 
 putlog "$scriptname loading configuration..."
@@ -359,13 +359,18 @@ proc znc:chpass {nick host handle text} {
         if {$username == "" } {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}chpass syntax is \"${scriptCommandPrefix}chpass <zncusername> <newpassword>\" for more please use \"${scriptCommandPrefix}help chpass"
         }
-        if [ validuser $username ] {
-                znc:controlpanel:Set password $username $newpass
-                puthelp "NOTICE $nick :Password for $username has been set to $newpass."
+        if [ matchattr $nick Q] {
+                if [ validuser $username ] {
+                        znc:controlpanel:Set password $username $newpass
+                        puthelp "NOTICE $nick :Password for $username has been set to $newpass."
+                } else {
+                        puthelp "NOTICE $nick :$username does not exist"
+                }
         } else {
-                puthelp "NOTICE $nick :$username does not exist"
+                puthelp "NOTICE $nick :You don't have access to perform this command ! Flag +Q needed !!"
         }
 }
+
 
 proc znc:deny {nick host handle chan text} {
         global scriptCommandPrefix
@@ -1291,7 +1296,7 @@ bind MSG - "Request" znc:MSG:request
 bind MSG Y "Confirm" znc:MSG:confirm
 bind MSG Y "chemail" znc:MSG:chemail
 bind MSG Y "AddVhost" znc:MSG:addvhost
-bind MSG Q "chpass" znc:MSG:chpass
+bind MSG YQ "chpass" znc:MSG:chpass
 bind MSG Y "Deny" znc:MSG:deny
 bind MSG Y "DelUser" znc:MSG:delUser
 bind MSG Y "noIdle" znc:MSG:noIdle

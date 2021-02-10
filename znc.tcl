@@ -1019,7 +1019,7 @@ proc znc:PUB:request {requester host handle chan text} {
 }
 
 proc znc:MSG:request {nick host handle text} {
-        znc:request $nick $host $handle $nick $text $requester
+        znc:request $nick $host $handle $nick $text
 }
 
 ## Confirm Commands

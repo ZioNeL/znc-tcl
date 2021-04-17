@@ -15,7 +15,7 @@ To have this tcl working follow the following stepts:
  7. After you set our password on irc, request DCC chat with the bot: /ctcp eggdrop_name chat
  8. Grant you the znc.tcl admin flags : .chattr <your_username> +YQ 
  9. Activate lastseen module via DCC Partyline: .msg *status load_mod lastseen
-10. Create lastseen user to the bot in order to not get ignored: .+user lastseen , .+host laseen *lastseen!znc@znc.in , .chattr lastseen +f
+10. Create lastseen user to the bot in order to not get ignored: .+user lastseen , .+host lastseen *lastseen!znc@znc.in , .chattr lastseen +f
 
 Now you are all set . 
 

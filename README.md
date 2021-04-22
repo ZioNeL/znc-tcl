@@ -16,9 +16,9 @@ To have this tcl working follow the following stepts:
  8. Grant you the znc.tcl admin flags : .chattr <your_username> +YQ 
  9. Activate lastseen module via DCC Partyline: .msg *status load_mod lastseen
 10. Create lastseen user to the bot in order to not get ignored: 
-   .+user lastseen 
-   .+host lastseen *lastseen!znc@znc.in 
-   .chattr lastseen +f
+10.1   .+user lastseen 
+10.2   .+host lastseen *lastseen!znc@znc.in 
+10.3   .chattr lastseen +f
 
 Now you are all set . 
 

@@ -1,7 +1,46 @@
-###############################################################################
-### Preconfiguration please don't change...
-### Script Logic ## Handle with care!
-###############################################################################
+###############################################################################################################
+###############################################################################################################
+###                                                                                                         ###
+###                                                                                                         ###
+###     ######## ##    ##  ######      ########  ######  ##          ##     ##  #######        #####        ###
+###          ##  ###   ## ##    ##        ##    ##    ## ##          ##     ## ##     ##      ##   ##       ###
+###         ##   ####  ## ##              ##    ##       ##          ##     ##        ##     ##     ##      ###
+###        ##    ## ## ## ##              ##    ##       ##          ##     ##  #######      ##     ##      ###
+###       ##     ##  #### ##              ##    ##       ##           ##   ##         ##     ##     ##      ###
+###      ##      ##   ### ##    ## ###    ##    ##    ## ##            ## ##   ##     ## ###  ##   ##       ###
+###     ######## ##    ##  ######  ###    ##     ######  ########       ###     #######  ###   #####        ###
+###                                                                                                         ###
+###                                                                                                         ###
+###############################################################################################################
+###############################################################################################################
+
+########################################################################################
+###             ChangeLog                                                            ###
+########################################################################################
+### 05.05.2021 - Complete Re-design of znc.tcl                                       ###
+###            - Rised version to 3.0                                                ###
+########################################################################################
+### 07.06.2020 - chpass MSG Command now checks for flag +Q                           ###
+###            - chpass MSG Command on !help                                         ###
+###            - Rised version to 2.5.1                                              ###
+########################################################################################
+### 29.04.2020 - !check <vhost> command implemented                                  ###
+###            - ZNC password is now generated ONLY on !confirm                      ###
+###            - !vhosts command included in !help                                   ###
+###            - !lastseen replies only to admins who issued !online command first ! ###
+###            - znc.tcl v2.5 is now Live !!!                                        ###
+########################################################################################
+### 06.04.2020 - Addition of !Admins , !Online and !Offline Commands !               ###
+###            - Implementation of instructions sent via NOTICE on user channel join ###
+###            - Implementation of !lastseen command                                 ###
+###            - znc.tcl v2.0 is now Live !!!                                        ###
+### 06.03.2020 - Original Import for znc.tcl                                         ###
+###            - znc.tcl v1.0 is now Live !!!                                        ###
+########################################################################################
+
+########################################################################################
+###            Configuration ...                                                     ###
+########################################################################################
 set scriptname "Free ZNC management script"
 set scriptOwner "Christoph Kern"
 set scriptOwnerMail "Sheogorath@shivering-isles.de"
@@ -11,27 +50,10 @@ set scriptchannel "#ZNC"
 set scriptOwnerNetwork "irc.shivering-isles.de"
 set scriptUpdaterNetwork "irc.universalnet.org @ UniversalNet"
 set scriptversion "0.7.0.1"
-set scriptversionUpdated "2.5.3"
+set scriptversionUpdated "3.0"
 set scriptdebug 0
 
 putlog "$scriptname loading configuration..."
-
-###############################################################################
-### End of Preconfig
-###############################################################################
-
-
-###############################################################################
-### Start of config
-###############################################################################
-
-
-### Script --------------------------------------------------------------------
-# Script specific settings
-#
-#
-###----------------------------------------------------------------------------
-
 ## set to 0 to minimize script putlog part
 set scriptUseBigHeader 1
 
@@ -44,35 +66,20 @@ set scriptCommandPrefix "!"
 ## Sendmailpath !!!!! YOU REALLY NEED TO CHECK THE PATH !!!!!
 set sendmailPath "/usr/sbin/sendmail"
 
-### ZNC -----------------------------------------------------------------------
-# Here you can configure your whole ZNC settings
-#
-#
-###----------------------------------------------------------------------------
-
-## ZNC Network name
-set zncnetworkname "your_Network_name"
-
-## Server Port name
-#set port "6667"
-
-## ZNC server name
-#set server "irc.universalnet.org"
-
 ## The prefix set for Modules for Bot's ZNC-User
 set zncprefix "*"
 
-## The DNS-Host of your ZNC Server
+## The Host of your ZNC Server
 set znchost "hostname_or_ip_of_znc_server"
 
 ## The ZNC NON-SSL Port, if not exists set ""
-set zncNonSSLPort "1234"
+set zncNonSSLPort "port_number_of_the_running_znc_bouncer"
 
 ## The ZNC SSL Port, if not exists set ""
 set zncSSLPort ""
 
 ## The ZNC-Webinterface NON-SSL Port, if not exists set ""
-set zncWebNonSSLPort "1234"
+set zncWebNonSSLPort "port_number_of_the_running_znc_bouncer"
 
 ## The ZNC-Webinterface SSL Port, if not exists set ""
 set zncWebSSLPort ""
@@ -81,18 +88,21 @@ set zncWebSSLPort ""
 set zncAdminName "Name_of_ZNC_Admin"
 
 ## The E-Mail address of server support/admin
-set zncAdminMail "znc-admin@example.org"
-set zncRequestMail "znc-request@example.org"
+set zncAdminMail "znc-admin_email_here@example.org"
+set zncRequestMail "znc-request_from_email_address_here@example.org"
 
 ## The ZNC IRC Server
+set zncnetworkname "your_Network_name"
 set zncircserver "irc.example.org"
 set zncircserverport "6667"
-set zncChannelName "#ZNC"
+set zncChannelName "#freeznc_channel_name"
+set defaultUserModules { "lastseen" "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
+set zncDefaultUserModules { "controlpanel" }
 
-#E-mail Seetings
+#E-mail Seetings - Change Your_NetWork_name with the name of your Network and znc_request_email@domain.com with znc request e-mail address from.
 proc mail:sendTo:user { from to subject content {cc "" } } {
-        global sendmailPath zncnetworkname zncAdminMail
-        set msg {From: Network_name_here FreeZNC <znc-request@example.org>}
+        global sendmailPath zncnetworkname zncAdminMail zncRequestMail
+        set msg {From: UniversalNet FreeZNC <znc-request@universalnet.org>  }
         append msg \n "To: " [join $to , ]
         append msg \n "Cc: " [join $cc , ]
         append msg \n "Subject: $subject"
@@ -101,170 +111,59 @@ proc mail:sendTo:user { from to subject content {cc "" } } {
         exec $sendmailPath -oi -t << $msg
 }
 
+############################################################################################################################
+## Define the ZNC Vhosts. Please Keep in mind that these VHOSTS must be UP on server`s network interfaces first !!!      ###
+## Example:                                                                                                              ###
+## set vhost {                                                                                                           ###
+## "10.0.1.2"                                                                                                            ###
+## "10.0.1.3"                                                                                                            ###
+## }                                                                                                                     ###
+##                                                                                                                       ###
+## If no vhost is defined the ZNC accounts will get the ip address of the ZNC admin bouncer.                             ###
+############################################################################################################################
+
+set vhost {
+""
+}
+
+########################################################################################
+###  From here don`t edit anything, but if you do, it will be on your own risk !!!!  ###
+########################################################################################
+
+#E-mail Seetings
+
 ## The Level of Security for the random generated password for new ZNC-users (recommanded is 3 means [a-zA-Z0-9])
 set zncPasswordSecurityLevel 3
 
 ## The Length of the automatic generated password)
 set zncPasswordLength 16
 
-### Optional - Preconfiguration -----------------------------------------------
-# Default Modules and Networks
-# !!!!!!! DISABLED !!!!!!!! FEATURE COMMING SOON !!!!!!!!
-#
-###----------------------------------------------------------------------------
-
-## Default User Modules loaded, if not exists set { } if you use arguments do it like that: "autoreply \"I'll be back soon\""
-set defaultUserModules { "lastseen" "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
-set zncDefaultUserModules {  }
-
-## Default User Modules loaded, if not exists set { } if you use arguments do it like that: "autoreply \"I'll be back soon\""
-set defaultUserModules { "lastseen" "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
-set zncDefaultNetworkModules {  }
-
-### Preconfigured Networks
-## Enable Preconfigured Networks
-set usePreconfiguredNetworks 0
-
-## Array of Preconfigured Networks (only works if usePreconfiguredNetworks is set to 1 )
-array set knownNetworks {
-        NetworkName "server_adress server_port" 
-}
-## Forces to 1 Network  !!!!!!! DISABLED !!!!!!!! FEATURE COMMING SOON !!!!!!!!
-#set zncEnforcedNetwork "irc.shivering-isles.de +6697"
-set zncEnforcedNetwork "irc.example.org 6666"
-
-
-### Optional - Topic Settings -------------------------------------------------
-# Topic Settings
-# !!!!!!! DISABLED !!!!!!!! FEATURE COMMING SOON !!!!!!!!
-#
-###----------------------------------------------------------------------------
-
-## Change Topic 1 means on 0 means off
-set zncTopic 1
-
-## Show Number of ZNC users in Topic
-set zncTopicUsercount 1
-
-## Show Serverdata in Topic
-set zncTopicServerdata 1
-
-## Show Name of server support/admin
-set zncTopicShowAdmin 1
-
-## Topicprefix
-set zncTopicPrefix ""
-
-## GreetSuffix
-set zncTopicSuffix ""
-
-
-### Optional - Greeting Settings ----------------------------------------------
-# Settings for Greeting
-# !!!!!!! DISABLED !!!!!!!! FEATURE COMMING SOON !!!!!!!!
-#
-###----------------------------------------------------------------------------
-
-## Show Greeting 1 means on 0 means off
-set zncGreeting 1
-
-## Greet prefix (possible values for replace: %nick% %channel%)
-set zncGreetPrefix "\00300,01"
-
-## Greet suffix (possible values for replace: %nick% %channel%)
-set zncGreetSuffix "\003"
-
-## Greet Messages (possible values for replace: %nick% %channel% %zncAdminName% %zncAdminMail% %zncNonSSLPort% %zncSSLPort% %zncWebSSLPort% %zncWebNonSSLPort% %znchost%)
-set zncGreetings {
-        "Hello %nick%, stay here or manage you ZNC Account via https://%znchost%:%zncWebSSLPort%!"
-        "Hello %nick%, welcome to %channel%!"
-        "Welcome %nick%, %channel% is for ZNC management. To request a ZNC-Account use !help request"
-        }
-
-
-### Optional - Advertice ------------------------------------------------------
-# Settings for advertice your network
-# !!!!!!! DISABLED !!!!!!!! FEATURE COMMING SOON !!!!!!!!
-#
-###----------------------------------------------------------------------------
-
-## Do Advertice 1 means on 0 means off (if 0 scriptAdvertice is off, too)
-set zncAdvertice 1
-
-## Show Number of ZNC users in Advertice
-set zncAdverticeUsercount 1
-
-## Show Serverdata in Topic
-set zncAdverticeServerdata 1
-
-## Show Name of server support/admin
-set zncAdverticeShowAdmin 1
-
-## Sentences for Advertice
-#set zncAdverticeSenteces { } #disabled
-set zncAdverticeSenteces {
-        "Get your Free ZNC now!"
-        ""}
-
-
-###############################################################################
-### End of Config
-###############################################################################
-
-###############################################################################
-### Script Logic ## Handle with care! (If you change 1 character my support ends)
-###############################################################################
-putlog "$scriptname configuration loaded"
-putlog "$scriptname loading script..."
-
-if { $scriptUseBigHeader } {
-        putlog "$scriptname is wirtten by $scriptOwner and updated by $scriptUpdater"
-        putlog "If you need help join irc://$scriptUpdaterNetwork/$scriptchannel"
-        putlog "If you can't join or want to contact me inanother way, you can E-Mail to $scriptOwnerMail"
-        putlog "Enjoin your work with $scriptname"
-}
-
-if { $scriptdebug } {
-        putlog "!!!!!!!!!!!!WARNING!!!!!!!!!!!!!!"
-        putlog "RUNNING SCRIPT IN DEBUG MODE! DO NOT RUN PRODUCTIVE!"
-}
-
 ### Bot Commands --------------------------------------------------------------
 
-proc znc:vhosts { nick host handle chan text } {
-        global scriptCommandPrefix
-        set vhosts [lindex $text 0]
-        if {$vhosts == "" } {
-                puthelp "NOTICE $nick :#ZNC Vhosts available are:"
-                puthelp "NOTICE $nick :10.0.0.2 , 10.0.0.3, 10.0.0.4 , 10.0.0.5" #Modify with your available vhosts !
-        }
-}
-
 proc znc:request { nick host handle chan text } {
-        global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength zncnetworkname zncDefaultUserModules zncDefaultNetworkModules usePreconfiguredNetworks zncnetworkname 
+        global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength zncnetworkname zncDefaultUserModules zncDefaultNetworkModules usePreconfiguredNetworks zncnetworkname vhost
         set username [lindex $text 0]
         set email [lindex $text 1]
-        set vhost [lindex $text 2]
-        set server [lindex $text 3]
-        set port [lindex $text 4]
-        set networkname [lindex $text 5]
+        set server [lindex $text 2]
+        set port [lindex $text 3]
+        set networkname [lindex $text 4]
 
 
-        if { $email == "" || $vhost == "" } {
-                puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}request <zncusername> <e-mail-address> <vhost> \" for more please use \"${scriptCommandPrefix}help request" 
+        if { $email == ""} {
+                puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}request <zncusername> <e-mail-address> <vhost> \" for more please use \"${scriptCommandPrefix}help request"
                 return
         } else {
-	        set password [znc:helpfunction:generatePassword $zncPasswordSecurityLevel $zncPasswordLength ]
+                set password [znc:helpfunction:generatePassword  $zncPasswordSecurityLevel $zncPasswordLength ]
                 if [ adduser $username ] {
                         setuser $username COMMENT $email
                         chattr $username +ZC
                         znc:controlpanel:AddUser $username $password
                         znc:blockuser:block $username
                         znc:helpfunction:loadModuleList $username $zncDefaultUserModules
-	                znc:controlpanel:AddNetwork $username $zncnetworkname
-	                znc:controlpanel:SetNetwork bindhost $username $zncnetworkname $vhost
+                        znc:controlpanel:AddNetwork $username $zncnetworkname
+                        znc:controlpanel:Set bindhost $username [lindex $vhost [rand [llength $vhost]]]
                         znc:controlpanel:Set RealName $username $username
-			mail:simply:sendUserRequest2 $username $vhost
+                        mail:simply:sendUserRequest2 $username $password $vhost
                         if { $networkname != ""} {
                                 set preServer ""
                                 if { $usePreconfiguredNetworks } {
@@ -286,6 +185,7 @@ proc znc:request { nick host handle chan text } {
         }
 }
 
+
 proc znc:confirm {requester host handle chan text} {
         global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength zncnetworkname zncircserver zncircserverport zncChannelName
         set username [lindex $text 0]
@@ -298,20 +198,20 @@ proc znc:confirm {requester host handle chan text} {
                 set password [znc:helpfunction:generatePassword $zncPasswordSecurityLevel $zncPasswordLength ]
                 znc:controlpanel:Set "password" $username $password
                 mail:simply:sendUserRequest $username $password
-		mail:simply:sendUserRequest3 $username $password
+                mail:simply:sendUserRequest3 $username $password
                 znc:blockuser:unblock $username
                 chattr $username -C
                 puthelp "NOTICE $requester :$username is now confirmed."
                 puthelp "NOTICE $requester :To Connect to ZNC-Server use as IDENT ${username} and \"${password}\" as server-password"
                 znc:controlpanel:AddServer $username $zncnetworkname $zncircserver:$zncircserverport
                 znc:controlpanel:AddChan $username $zncnetworkname $zncChannelName
-#               znc:controlpanel:Reconnect $username $zncnetworkname
         } elseif [ validuser $username ] {
                 puthelp "NOTICE $requester :$username is already confirmed."
         } else {
                 puthelp "NOTICE $requester :$username does not exist"
         }
 }
+
 
 proc znc:chemail { nick host handle chan text } {
         global scriptCommandPrefix zncnetworkname
@@ -329,7 +229,7 @@ proc znc:chemail { nick host handle chan text } {
 }
 
 proc znc:addvhost {nick host handle chan text} {
-        global scriptCommandPrefix zncnetworkname zncircserver zncircserverport zncChannelName 
+        global scriptCommandPrefix zncnetworkname zncircserver zncircserverport zncChannelName
         set username [lindex $text 0]
         set vhost [lindex $text 1]
         if {$username == "" } {
@@ -347,7 +247,9 @@ proc znc:addvhost {nick host handle chan text} {
         }
 }
 
+
 proc znc:chpass {nick host handle text} {
+#        global scriptCommandPrefix
         set username [lindex $text 0]
         set newpass [lindex $text 1]
         if {$username == "" } {
@@ -408,7 +310,7 @@ proc znc:noIdle {nick host handle chan text} {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}noIdle syntax is \"${scriptCommandPrefix}noIdle <zncusername>\" for more please use \"${scriptCommandPrefix}help noIdle"
         }
         if [ validuser $username ] {
-		znc:controlpanel:Set QuitMsg $username "ZNC Account deleted. User was inactive for 15 days or more."
+                znc:controlpanel:Set QuitMsg $username "ZNC Account deleted. User was inactive for 15 days or more."
                 mail:simply:sendUsernoIdle $username
                 znc:controlpanel:DelUser $username
                 deluser $username
@@ -419,7 +321,7 @@ proc znc:noIdle {nick host handle chan text} {
 }
 
 proc znc:lastseen {nick host handle chan text} {
-        global scriptCommandPrefix zncprefix partychan
+        global scriptCommandPrefix zncprefix partychan zncChannelName
                 znc:lastseen:show
                 znc:chatproc
 }
@@ -440,10 +342,9 @@ proc znc:Admins {nick host handle chan text} {
         if { $Admins != "" } {
                 puthelp "NOTICE $nick :Free-ZNC Admins: $Admins"
         } else {
-		puthelp "NOTICE $nick :no Free-ZNC Admins are online at this moment! Please try again later or send an e-mail to $zncRequestMail with your question or problem."
+                puthelp "NOTICE $nick :no Free-ZNC Admins are online at this moment! Please try again later or send an e-mail to $zncRequestMail with your question or problem."
         }
 }
-
 proc znc:Online {requester host handle chan text} {
         global scriptCommandPrefix
         set username [lindex $text 0]
@@ -524,6 +425,7 @@ proc znc:help {nick host handle chan text} {
                                 }
                                 puthelp "NOTICE $nick :### End of Help ###"
                         }
+
                         confirm {
                                 puthelp "NOTICE $nick :#Help for ${scriptCommandPrefix}Confirm"
                                 puthelp "NOTICE $nick :# "
@@ -683,17 +585,18 @@ proc znc:help {nick host handle chan text} {
                                         puthelp "NOTICE $nick :#please use ${scriptCommandPrefix}help without parameters for full command list"
                                 } else {
                                         puthelp "NOTICE $nick :#please use /msg $botnick help without parameters for full command list"
+
                                 }
                                 puthelp "NOTICE $nick :### End of Help ###"
                         }
                 }
         } else {
-                if [matchattr $nick Q] {
+                if {[matchattr $nick Q]} {
                 puthelp "NOTICE $nick :#$scriptname Command list available for ADMINS:"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request               |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}ListUnconfirmedUsers  |Lists unconfirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Confirm               |Confirms ZNC Account request. \002\00304Requires Admin Rights\003\002."
-		puthelp "NOTICE $nick :#${scriptCommandPrefix}chemail               |Change e-mail address for ZNC Account. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}chemail               |Change e-mail address for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}addvhost              |Change host for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#/msg $botnick chpass        |Change password for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Deny                  |Denies a ZNC Account request. \002\00304Requires Admin Rights\003\002."
@@ -704,7 +607,6 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Online                |Set A Free-ZNC Admin with Status ONLINE. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Offline               |Set A Free-ZNC Admin with Status OFFLINE. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Admins                |Shows current Free-ZNC Admins that are ONLINE"
-                puthelp "NOTICE $nick :#${scriptCommandPrefix}Vhosts                |Shows the available vhosts for \002\00304!request\003\002 command."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}help                  |Shows help for commands"
                 puthelp "NOTICE $nick :#"
                 puthelp "NOTICE $nick :#Use\"${scriptCommandPrefix}help <command>\" for full helpcontext."
@@ -727,7 +629,7 @@ proc znc:help {nick host handle chan text} {
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request               |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}ListUnconfirmedUsers  |Lists unconfirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Confirm               |Confirms ZNC Account request. \002\00304Requires Admin Rights\003\002."
-		puthelp "NOTICE $nick :#${scriptCommandPrefix}chemail               |Change e-mail address for ZNC Account. \002\00304Requires Admin Rights\003\002."
+                puthelp "NOTICE $nick :#${scriptCommandPrefix}chemail               |Change e-mail address for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}addvhost              |Change host for ZNC Account. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Deny                  |Denies a ZNC Account request. \002\00304Requires Admin Rights\003\002."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}DelUser               |Deletes a confirmed ZNC Account. \002\00304Requires Admin Rights\003\002."
@@ -754,12 +656,11 @@ proc znc:help {nick host handle chan text} {
                         puthelp "NOTICE $nick :#Example:"
                         puthelp "NOTICE $nick :#   /msg $botnick help request"
                 }
-                puthelp "NOTICE $nick :### End of Help ###"		
+                puthelp "NOTICE $nick :### End of Help ###"
         } else {
                 puthelp "NOTICE $nick :#$scriptname Command list:"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}request                 |Requests an ZNC Account"
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}Admins                  |Shows current Free-ZNC Admins that are ONLINE"
-                puthelp "NOTICE $nick :#${scriptCommandPrefix}Vhosts                  |Shows the available vhosts for \002\00304!request\003\002 command."
                 puthelp "NOTICE $nick :#${scriptCommandPrefix}help                    |Shows help for commands"
                 puthelp "NOTICE $nick :#"
                 puthelp "NOTICE $nick :#Use\"${scriptCommandPrefix}help <command>\" for full helpcontext."
@@ -780,8 +681,6 @@ proc znc:help {nick host handle chan text} {
      }
    }
 }
-   
-
 
 ### ZNC - Functions -----------------------------------------------------------
 
@@ -941,14 +840,15 @@ proc mail:simply:send2 { usermail subject content } {
         mail:sendTo:user2 $zncRequestMail $usermail $subject $content
 }
 
-proc mail:simply:sendUserRequest2 { username vhost } {
+proc mail:simply:sendUserRequest2 { username password vhost } {
         global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail zncRequestMail zncnetworkname
         set email [getuser $username COMMENT]
         set content "Hello!!! \n $username requested a FREE ZNC-Account hosted by $zncnetworkname\n"
         append content \n "ZNC Connection Port is: $zncNonSSLPort"
         append content \n "ZNC Username is: $username"
-        append content \n "ZNC vhost set is: $vhost"
+        append content \n "ZNC requester e-mail address set is: $email"
         append content \n "If all the data is ok please proceed and confirm the request using: !confirm $username , else please deny the request using : !deny $username"
+
         if { $zncRequestMail != "" } {
         append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
         }
@@ -961,24 +861,16 @@ proc mail:simply:sendUserRequest { username password } {
         set email [getuser $username COMMENT]
         set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
         append content \n "Your ZNC Connection Host is: $znchost\n"
-#       if { $zncNonSSLPort != "" } {
-#       append content \n "To connect your IRC Client via NON-SSL connect to: ${znchost}:${zncNonSSLPort}"
-#       }
-#       if { $zncSSLPort != "" } {
-#       append content \n "To connect your IRC Client via SSL connect to: ${znchost}:${zncSSLPort}"
-#       }
         append content \n "Your ZNC Connection Port is: $zncNonSSLPort"
         append content \n "Your ZNC Username is: $username"
         append content \n "Your ZNC Password is: $password"
-        append content \n "To connect to your ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} ${password}"
+        append content \n "To connect to your ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} $username:${password}"
+        append content \n ""
+        append content \n "To change your znc password login on webpage address: http://${znchost}:${zncNonSSLPort} with the provided user and password."
+        append content \n "Go to 'Your Settings' and in 'Authentication' section type the new password."
+        append content \n ""
         append content \n\n "Please Keep in mind that the ZNC account will be automatically DELETED if you DO NOT LOGIN on to your ZNC account for more then 25 DAYS !!!"
         append content \n\n "Thank you and Enjoy $zncnetworkname !!!"
-#       if { $zncWebNonSSLPort != "" } {
-#       append content \n "To login via NON-SSL-Webinterface goto: http://${znchost}:${zncWebNonSSLPort}"
-#       }
-#       if { $zncWebSSLPort != "" } {
-#       append content \n "To login via SSL-Webinterface goto: https://${znchost}:${zncWebSSLPort}"
-#       }
         if { $zncAdminMail != "" } {
         append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
         }
@@ -993,13 +885,17 @@ proc mail:simply:sendUserRequest3 { username password } {
         append content \n "ZNC Username is: $username"
         append content \n "ZNC password set is: $password"
         append content \n "ZNC requester e-mail address is: $email"
-        append content \n\n "An e-mail with login data and instructions was sent also to requester`s e-mail address : $email."
+        append content \n "To connect to his ZNC Client on the user must use /server ${znchost} ${zncNonSSLPort} $username:${password}"
+        append content \n ""
+        append content \n "To change your znc password login on webpage address: http://${znchost}:${zncNonSSLPort} with the provided user and password."
+        append content \n "He has to access 'Your Settings' and in 'Authentication' section he can type the new password."
+        append content \n ""
+        append content \n\n "An e-mail with login data and login/change password instructions was sent also to requester`s e-mail address : $email."
         if { $zncRequestMail != "" } {
         append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
         }
         mail:simply:send $zncRequestMail  "$username Request ZNC-Account at $zncnetworkname was confirmed" $content
 }
-
 
 proc mail:simply:sendUserDeny { username } {
         global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
@@ -1023,7 +919,6 @@ proc mail:simply:sendUserDel { username } {
         mail:simply:send $email "ZNC-Account Deleted at $zncnetworkname" $content
 }
 
-
 proc mail:simply:sendUsernoIdle { username } {
         global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
         set email [getuser $username COMMENT]
@@ -1041,7 +936,7 @@ proc eggdrop:helpfunction:isNotZNCChannel { chan } {
 }
 
 proc debug:helpfunction:test { nick host handle text } {
-	global zncChannelName
+        global zncChannelName
         puthelp "PRIVMSG $nick :Channels: [join [channels] ,]"
         puthelp "PRIVMSG $nick :[eggdrop:helpfunction:isNotZNCChannel "$zncChannelName" ]"
 }
@@ -1125,10 +1020,7 @@ proc znc:PUB:chpass {nick host handle chan text} {
 }
 
 proc znc:MSG:chpass {nick host handle text} {
-#        set username [lindex $text 0]
-#        set newpass [lindex $text 1]
         znc:chpass $nick $host $handle $text
-#        znc:controlpanel:Set password $username $newpass
 }
 
 ## Deny Commands
@@ -1153,14 +1045,13 @@ proc znc:PUB:noIdle {nick host handle chan text} {
         znc:noIdle $nick $host $handle $chan $text
 }
 
-proc znc:MSG:noIdle {nick host handle text} {
-        znc:noIdle $nick $host $handle $nick $text
-}
-
-## lastseen Commands
 proc znc:PUB:lastseen {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
         znc:lastseen $nick $host $handle $chan $text
+}
+
+proc znc:MSG:noIdle {nick host handle text} {
+        znc:noIdle $nick $host $handle $nick $text
 }
 
 ## ListUnconfirmedUsers Commands
@@ -1192,6 +1083,7 @@ proc znc:PUB:Offline {nick host handle chan text} {
         znc:Offline $nick $host $handle $chan $text
 }
 
+
 ## Help Commands
 proc znc:PUB:help {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
@@ -1200,16 +1092,6 @@ proc znc:PUB:help {nick host handle chan text} {
 
 proc znc:MSG:help {nick host handle text} {
         znc:help $nick $host $handle $nick $text
-}
-
-## Vhosts List Commands
-proc znc:PUB:vhosts {nick host handle chan text} {
-        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
-        znc:vhosts $nick $host $handle $chan $text
-}
-
-proc znc:MSG:vhosts {nick host handle text} {
-        znc:vhosts $nick $host $handle $nick $text
 }
 
 ## version Commands
@@ -1233,24 +1115,23 @@ set bots [bots]
     }
 }
 
-
 proc joinnotice {noticenick noticehost noticehandle noticechan} {
 global zncChannelName zncnetworkname
  if { $noticechan == $::zncChannelName } {
    putserv "NOTICE $noticenick :Welcome To $zncChannelName on $zncnetworkname Network."
-   putserv "NOTICE $noticenick :Please type \002\00304!vhosts\003\002 in order to see the available vhosts before you request a Free-ZNC on $zncnetworkname."
    putserv "NOTICE $noticenick :Please type \002\00304!request\003\002 in order to request a free-znc !"
-   putserv "NOTICE $noticenick :Use only the vhosts provided in \002\00304!vhosts\003\002 command in order to have your ZNC request \002\00303ACCEPTED\003\002 , if NOT your request will be \002\00304REJECTED\003\002 !!"
    putserv "NOTICE $noticenick :Free-ZNC Admins will gladly help you if needed. To check if an admin is ONLINE, please type \002\00304!admins\003\002 command in $zncChannelName."
    putserv "NOTICE $noticenick :Thank you for joining $zncnetworkname Network. Enjoy your stay in here!"
     }
 }
 
+
+
 proc status:cmd {nick host hand chan arg} {
 global zncircserverport
         set ip [lindex [split $arg] 0]
 if {$ip == ""} {
-        putserv "NOTICE $nick :Foloseste !check <vhost>"
+        putserv "NOTICE $nick :Please use !check <vhost>"
         return
 }
         set to_much 0
@@ -1265,7 +1146,7 @@ foreach i $split_out {
         set nr [lindex $split_i 0]
         set the_ip [lindex $split_i 1]
 if {[string match -nocase $ip $the_ip]} {
-if {$nr > 2} {
+if {$nr > 254} {
         set to_much 1
         break
                 }
@@ -1274,16 +1155,17 @@ if {$nr > 2} {
 #       putlog $ips_out
 }
 if {$to_much == "1"} {
-        putserv "NOTICE $nick :$the_ip are deja 3 conexiuni, te rog alege alt vhost"
+        putserv "NOTICE $nick :$the_ip has already more than 254 connections, please select other vhost !!!"
         return
         }
 if {$ips_out == ""} {
-        putserv "NOTICE $nick :Pentru $ip nu am gasit nicio conexiune."
+        putserv "NOTICE $nick :For $ip No active connection are active at the moment."
         return
         }
 #       putserv "NOTICE $nick :[join $ips_out ", "]"
-        putserv "NOTICE $nick :$ip are $nr conexiuni."
+        putserv "NOTICE $nick :$ip has $nr connections."
 }
+
 
 ### custom flags --------------------------------------------------------------
 
@@ -1309,10 +1191,9 @@ bind PUB - "${scriptCommandPrefix}Admins" znc:PUB:Admins
 bind PUB YQ "${scriptCommandPrefix}Online" znc:PUB:Online
 bind PUB YQ "${scriptCommandPrefix}Offline" znc:PUB:Offline
 bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
-bind PUB - "${scriptCommandPrefix}vhosts" znc:PUB:vhosts
 bind PUB - "${scriptCommandPrefix}version" znc:PUB:version
 
-bind msgm - * znc:chatproc
+bind msgm f * znc:chatproc
 bind join -|- * joinnotice
 bind pub - !check status:cmd
 
@@ -1328,9 +1209,7 @@ bind MSG Y "noIdle" znc:MSG:noIdle
 bind MSG Y "ListUnconfirmedUsers" znc:MSG:listUnconfirmed
 bind MSG Y "LUU" znc:MSG:listUnconfirmed
 bind MSG - "help" znc:MSG:help
-bind MSG - "vhosts" znc:MSG:vhosts
 bind MSG - "version" znc:MSG:version
-bind msgm f * znc:chatproc
 
 ## debug binds ----------------------------------------------------------------
 if {$scriptdebug} {
@@ -1341,6 +1220,17 @@ if {$scriptdebug} {
 
 ### End of Script -------------------------------------------------------------
 putlog "$scriptname version $scriptversion and upgraded to $scriptversionUpdated by $scriptUpdater loaded"
+putlog "$scriptname configuration loaded"
+putlog "$scriptname loading script..."
 
+if { $scriptUseBigHeader } {
+        putlog "$scriptname is wirtten by $scriptOwner and updated by $scriptUpdater"
+        putlog "If you need help join irc://$scriptUpdaterNetwork/$scriptchannel"
+        putlog "If you can't join and want to contact me in another way, you can E-Mail to $scriptUpdaterMail"
+        putlog "Enjoin your work with $scriptname"
+}
 
-
+if { $scriptdebug } {
+        putlog "!!!!!!!!!!!!WARNING!!!!!!!!!!!!!!"
+        putlog "RUNNING SCRIPT IN DEBUG MODE! DO NOT RUN PRODUCTIVE!"
+}

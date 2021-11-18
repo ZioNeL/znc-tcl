@@ -1083,8 +1083,8 @@ proc znc:PUB:confirm {requester host handle chan text} {
         znc:confirm $requester $host $handle $chan $text
 }
 
-proc znc:MSG:confirm { requester nick host handle text} {
-        znc:confirm $requester $nick $host $handle $nick $text
+proc znc:MSG:confirm {nick host handle text} {
+        znc:confirm $nick $host $handle $nick $text
 }
 
 ## Chemail Commands

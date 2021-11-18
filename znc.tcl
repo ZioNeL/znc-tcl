@@ -1027,6 +1027,7 @@ proc znc:PUB:confirm {requester host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
         znc:confirm $requester $host $handle $chan $text
 }
+
 proc znc:MSG:confirm {nick host handle text} {
         znc:confirm $nick $host $handle $nick $text
 }
@@ -1048,10 +1049,7 @@ proc znc:PUB:chpass {nick host handle chan text} {
 }
 
 proc znc:MSG:chpass {nick host handle text} {
-#        set username [lindex $text 0]
-#        set newpass [lindex $text 1]
         znc:chpass $nick $host $handle $text
-#        znc:controlpanel:Set password $username $newpass
 }
 
 ## Deny Commands
@@ -1070,6 +1068,20 @@ proc znc:PUB:delUser {nick host handle chan text} {
         znc:delUser $nick $host $handle $chan $text
 }
 
+proc znc:MSG:delUser {nick host handle text} {
+        znc:delUser $nick $host $handle $nick $text
+}
+
+## lastseen Commands
+proc znc:PUB:lastseen {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:lastseen $nick $host $handle $chan $text
+}
+
+proc znc:MSG:lastseen {nick host handle text} {
+        znc:lastseen $nick $host $handle $nick $text
+}
+
 ## noIdle Commands
 proc znc:PUB:noIdle {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
@@ -1078,12 +1090,6 @@ proc znc:PUB:noIdle {nick host handle chan text} {
 
 proc znc:MSG:noIdle {nick host handle text} {
         znc:noIdle $nick $host $handle $nick $text
-}
-
-## lastseen Commands
-proc znc:PUB:lastseen {nick host handle chan text} {
-        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
-        znc:lastseen $nick $host $handle $chan $text
 }
 
 ## ListUnconfirmedUsers Commands
@@ -1102,6 +1108,10 @@ proc znc:PUB:Admins {nick host handle chan text} {
         znc:Admins $nick $host $handle $chan $text
 }
 
+proc znc:MSG:Admins {nick host handle text} {
+        znc:Admins $nick $host $handle $nick $text
+}
+
 ## Online Command
 
 proc znc:PUB:Online {nick host handle chan text} {
@@ -1109,10 +1119,18 @@ proc znc:PUB:Online {nick host handle chan text} {
         znc:Online $nick $host $handle $chan $text
 }
 
+proc znc:MSG:Online {nick host handle text} {
+        znc:Online $nick $host $handle $nick $text
+}
+
 ## OFFLINE Command
 proc znc:PUB:Offline {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
         znc:Offline $nick $host $handle $chan $text
+}
+
+proc znc:MSG:Offline {nick host handle text} {
+        znc:Offline $nick $host $handle $nick $text
 }
 
 ## Help Commands
@@ -1134,7 +1152,6 @@ proc znc:PUB:version {nick host handle chan text} {
 proc znc:MSG:version {nick host handle text} {
         znc:version $nick $host $handle $nick $text
 }
-
 proc znc:chatproc {nick host handle text} {
 global botnick zncChannelName  requestlastseen
 set bots [bots]
@@ -1235,8 +1252,12 @@ bind MSG Y "DelUser" znc:MSG:delUser
 bind MSG Y "noIdle" znc:MSG:noIdle
 bind MSG Y "ListUnconfirmedUsers" znc:MSG:listUnconfirmed
 bind MSG Y "LUU" znc:MSG:listUnconfirmed
+bind MSG Y "Online" znc:MSG:Online
+bind MSG Y "Offline" znc:MSG:Offline
+bind MSG Y "lastseen" znc:MSG:lastseen
 bind MSG - "help" znc:MSG:help
 bind MSG - "version" znc:MSG:version
+bind MSG - "Admins" znc:MSG:Admins
 
 bind msgm f * znc:chatproc
 

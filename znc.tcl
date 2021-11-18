@@ -1039,15 +1039,24 @@ proc znc:PUB:delUser {nick host handle chan text} {
         znc:delUser $nick $host $handle $chan $text
 }
 
+proc znc:MSG:delUser {nick host handle text} {
+        znc:delUser $nick $host $handle $nick $text
+}
+
+## lastseen Commands
+proc znc:PUB:lastseen {nick host handle chan text} {
+        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
+        znc:lastseen $nick $host $handle $chan $text
+}
+
+proc znc:MSG:lastseen {nick host handle text} {
+        znc:lastseen $nick $host $handle $nick $text
+}
+
 ## noIdle Commands
 proc znc:PUB:noIdle {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
         znc:noIdle $nick $host $handle $chan $text
-}
-
-proc znc:PUB:lastseen {nick host handle chan text} {
-        if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
-        znc:lastseen $nick $host $handle $chan $text
 }
 
 proc znc:MSG:noIdle {nick host handle text} {
@@ -1070,11 +1079,19 @@ proc znc:PUB:Admins {nick host handle chan text} {
         znc:Admins $nick $host $handle $chan $text
 }
 
+proc znc:MSG:Admins {nick host handle text} {
+        znc:Admins $nick $host $handle $nick $text
+}
+
 ## Online Command
 
 proc znc:PUB:Online {nick host handle chan text} {
         if [eggdrop:helpfunction:isNotZNCChannel $chan ] { return }
         znc:Online $nick $host $handle $chan $text
+}
+
+proc znc:MSG:Online {nick host handle text} {
+        znc:Online $nick $host $handle $nick $text
 }
 
 ## OFFLINE Command
@@ -1083,6 +1100,9 @@ proc znc:PUB:Offline {nick host handle chan text} {
         znc:Offline $nick $host $handle $chan $text
 }
 
+proc znc:MSG:Offline {nick host handle text} {
+        znc:Offline $nick $host $handle $nick $text
+}
 
 ## Help Commands
 proc znc:PUB:help {nick host handle chan text} {
@@ -1208,8 +1228,13 @@ bind MSG Y "DelUser" znc:MSG:delUser
 bind MSG Y "noIdle" znc:MSG:noIdle
 bind MSG Y "ListUnconfirmedUsers" znc:MSG:listUnconfirmed
 bind MSG Y "LUU" znc:MSG:listUnconfirmed
+bind MSG Y "Online" znc:MSG:Online
+bind MSG Y "Offline" znc:MSG:Offline
+bind MSG Y "lastseen" znc:MSG:lastseen
 bind MSG - "help" znc:MSG:help
 bind MSG - "version" znc:MSG:version
+bind MSG - "Admins" znc:MSG:Admins
+
 
 ## debug binds ----------------------------------------------------------------
 if {$scriptdebug} {

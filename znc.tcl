@@ -6,7 +6,7 @@
 ###          ##  ###   ## ##    ##        ##    ##    ## ##          ##     ## ##     ##      ##   ##       ###
 ###         ##   ####  ## ##              ##    ##       ##          ##     ##        ##     ##     ##      ###
 ###        ##    ## ## ## ##              ##    ##       ##          ##     ##  #######      ##     ##      ###
-###       ##     ##  #### ##              ##    ##       ##           ##   ##         ##     ##     ##      ###
+###       ##     ##  #### ##              ##    ##       ##           ##   ##         ##     ##     ##  .1  ###
 ###      ##      ##   ### ##    ## ###    ##    ##    ## ##            ## ##   ##     ## ###  ##   ##       ###
 ###     ######## ##    ##  ######  ###    ##     ######  ########       ###     #######  ###   #####        ###
 ###                                                                                                         ###
@@ -63,53 +63,50 @@ set adverticeScriptOwner 0
 ## Prefix for triggering Bot Commands things like !request or .request
 set scriptCommandPrefix "!"
 
-## Sendmailpath !!!!! YOU REALLY NEED TO CHECK THE PATH !!!!!
-set sendmailPath "/usr/sbin/sendmail"
-
 ## The prefix set for Modules for Bot's ZNC-User
 set zncprefix "*"
 
 ## The Host of your ZNC Server
-set znchost "hostname_or_ip_of_znc_server"
+set znchost "10.0.0.1"
 
 ## The ZNC NON-SSL Port, if not exists set ""
-set zncNonSSLPort "port_number_of_the_running_znc_bouncer"
+set zncNonSSLPort "1234"
 
 ## The ZNC SSL Port, if not exists set ""
 set zncSSLPort ""
 
 ## The ZNC-Webinterface NON-SSL Port, if not exists set ""
-set zncWebNonSSLPort "port_number_of_the_running_znc_bouncer"
+set zncWebNonSSLPort "1234"
 
 ## The ZNC-Webinterface SSL Port, if not exists set ""
 set zncWebSSLPort ""
 
 ## The Name of server support/admin
-set zncAdminName "Name_of_ZNC_Admin"
+set zncAdminName "_-_"
 
 ## The E-Mail address of server support/admin
-set zncAdminMail "znc-admin_email_here@example.org"
-set zncRequestMail "znc-request_from_email_address_here@example.org"
+set zncAdminMail ""
+set zncRequestMail ""
 
 ## The ZNC IRC Server
-set zncnetworkname "your_Network_name"
-set zncircserver "irc.example.org"
+set zncnetworkname "ZNC"
+set zncircserver "irc.undernet.org"
 set zncircserverport "6667"
-set zncChannelName "#freeznc_channel_name"
+set zncChannelName "#relay"
 set defaultUserModules { "lastseen" "chansaver" "controlpanel" "buffextras" "autoreply \"I'll be back soon\""}
 set zncDefaultUserModules { "controlpanel" }
 
 #E-mail Seetings - Change Your_NetWork_name with the name of your Network and znc_request_email@domain.com with znc request e-mail address from.
-proc mail:sendTo:user { from to subject content {cc "" } } {
-        global sendmailPath zncnetworkname zncAdminMail zncRequestMail
-        set msg {From: UniversalNet FreeZNC <znc-request@universalnet.org>  }
-        append msg \n "To: " [join $to , ]
-        append msg \n "Cc: " [join $cc , ]
-        append msg \n "Subject: $subject"
-        append msg \n\n $content
-
-        exec $sendmailPath -oi -t << $msg
-}
+#proc mail:sendTo:user { from to subject content {cc "" } } {
+#        global sendmailPath zncnetworkname zncAdminMail zncRequestMail
+#        set msg {From: UniversalNet FreeZNC <znc-request@universalnet.org>  }
+#        append msg \n "To: " [join $to , ]
+#        append msg \n "Cc: " [join $cc , ]
+#        append msg \n "Subject: $subject"
+#        append msg \n\n $content##
+#
+#        exec $sendmailPath -oi -t << $msg
+#}
 
 ############################################################################################################################
 ## Define the ZNC Vhosts. Please Keep in mind that these VHOSTS must be UP on server`s network interfaces first !!!      ###
@@ -136,7 +133,7 @@ set vhost {
 set zncPasswordSecurityLevel 3
 
 ## The Length of the automatic generated password)
-set zncPasswordLength 16
+set zncPasswordLength 5
 
 ### Bot Commands --------------------------------------------------------------
 
@@ -150,7 +147,7 @@ proc znc:request { nick host handle chan text } {
 
 
         if { $email == ""} {
-                puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}request <zncusername> <e-mail-address> <vhost> \" for more please use \"${scriptCommandPrefix}help request"
+                puthelp "NOTICE $nick :${scriptCommandPrefix}request syntax is \"${scriptCommandPrefix}request <zncusername> <e-mail-address> \" for more please use \"${scriptCommandPrefix}help request"
                 return
         } else {
                 set password [znc:helpfunction:generatePassword  $zncPasswordSecurityLevel $zncPasswordLength ]
@@ -163,7 +160,6 @@ proc znc:request { nick host handle chan text } {
                         znc:controlpanel:AddNetwork $username $zncnetworkname
                         znc:controlpanel:Set bindhost $username [lindex $vhost [rand [llength $vhost]]]
                         znc:controlpanel:Set RealName $username $username
-                        mail:simply:sendUserRequest2 $username $password $vhost
                         if { $networkname != ""} {
                                 set preServer ""
                                 if { $usePreconfiguredNetworks } {
@@ -178,7 +174,7 @@ proc znc:request { nick host handle chan text } {
                                         }
                                 }
                         }
-                        puthelp "NOTICE $nick :Hey $nick, your request for $username is noticed and after confirm by an administrator you'll get an email with all needed data."
+                        puthelp "NOTICE $nick :Hey $nick, your request for $username is noticed and after confirm by an administrator you'll get an email with all needed data. Pleyse note your password ist $password"
                 } else {
                         puthelp "NOTICE $nick :Sry, but your wanted username is already in use..."
                 }
@@ -197,8 +193,6 @@ proc znc:confirm {requester host handle chan text} {
         if [ matchattr $username C] {
                 set password [znc:helpfunction:generatePassword $zncPasswordSecurityLevel $zncPasswordLength ]
                 znc:controlpanel:Set "password" $username $password
-                mail:simply:sendUserRequest $username $password
-                mail:simply:sendUserRequest3 $username $password
                 znc:blockuser:unblock $username
                 chattr $username -C
                 puthelp "NOTICE $requester :$username is now confirmed."
@@ -275,7 +269,6 @@ proc znc:deny {nick host handle chan text} {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}Deny syntax is \"${scriptCommandPrefix}Deny <zncusername>\" for more please use \"${scriptCommandPrefix}help Deny"
         }
         if [ matchattr $username C ] {
-                mail:simply:sendUserDeny $username
                 znc:controlpanel:DelUser $username
                 deluser $username
                 puthelp "NOTICE $nick :$username is now denied."
@@ -294,7 +287,6 @@ proc znc:delUser {nick host handle chan text} {
         }
         if [ validuser $username ] {
                 znc:controlpanel:Set QuitMsg $username "ZNC Account deleted. User Request!"
-                mail:simply:sendUserDel $username
                 znc:controlpanel:DelUser $username
                 deluser $username
                 puthelp "NOTICE $nick :$username is now deleted."
@@ -304,14 +296,13 @@ proc znc:delUser {nick host handle chan text} {
 }
 
 proc znc:noIdle {nick host handle chan text} {
-        global scriptCommandPrefix
+        global scriptCommandPrefixmail:simply
         set username [lindex $text 0]
         if {$username == "" } {
                 puthelp "NOTICE $nick :${scriptCommandPrefix}noIdle syntax is \"${scriptCommandPrefix}noIdle <zncusername>\" for more please use \"${scriptCommandPrefix}help noIdle"
         }
         if [ validuser $username ] {
                 znc:controlpanel:Set QuitMsg $username "ZNC Account deleted. User was inactive for 15 days or more."
-                mail:simply:sendUsernoIdle $username
                 znc:controlpanel:DelUser $username
                 deluser $username
                 puthelp "NOTICE $nick :$username is now deleted because of no login for more than 15 days"
@@ -830,107 +821,6 @@ proc znc:helpfunction:loadNetModuleList { username network list} {
         }
 }
 
-proc mail:simply:send { usermail subject content } {
-        global zncAdminMail
-        mail:sendTo:user $zncAdminMail $usermail $subject $content
-}
-
-proc mail:simply:send2 { usermail subject content } {
-        global zncRequestMail
-        mail:sendTo:user2 $zncRequestMail $usermail $subject $content
-}
-
-proc mail:simply:sendUserRequest2 { username password vhost } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail zncRequestMail zncnetworkname
-        set email [getuser $username COMMENT]
-        set content "Hello!!! \n $username requested a FREE ZNC-Account hosted by $zncnetworkname\n"
-        append content \n "ZNC Connection Port is: $zncNonSSLPort"
-        append content \n "ZNC Username is: $username"
-        append content \n "ZNC requester e-mail address set is: $email"
-        append content \n "If all the data is ok please proceed and confirm the request using: !confirm $username , else please deny the request using : !deny $username"
-
-        if { $zncRequestMail != "" } {
-        append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
-        }
-        mail:simply:send $zncRequestMail  "$username Requested ZNC-Account at $zncnetworkname" $content
-}
-
-
-proc mail:simply:sendUserRequest { username password } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
-        set email [getuser $username COMMENT]
-        set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
-        append content \n "Your ZNC Connection Host is: $znchost\n"
-        append content \n "Your ZNC Connection Port is: $zncNonSSLPort"
-        append content \n "Your ZNC Username is: $username"
-        append content \n "Your ZNC Password is: $password"
-        append content \n "To connect to your ZNC Client on IRC use /server ${znchost} ${zncNonSSLPort} $username:${password}"
-        append content \n ""
-        append content \n "To change your znc password login on webpage address: http://${znchost}:${zncNonSSLPort} with the provided user and password."
-        append content \n "Go to 'Your Settings' and in 'Authentication' section type the new password."
-        append content \n ""
-        append content \n\n "Please Keep in mind that the ZNC account will be automatically DELETED if you DO NOT LOGIN on to your ZNC account for more then 25 DAYS !!!"
-        append content \n\n "Thank you and Enjoy $zncnetworkname !!!"
-        if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
-        }
-        mail:simply:send $email "Free-ZNC-Account Request at $zncnetworkname" $content
-}
-
-proc mail:simply:sendUserRequest3 { username password } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail zncRequestMail
-        set email [getuser $username COMMENT]
-        set content "Hello!!! \n $username request for a FREE ZNC-Account hosted by $zncnetworkname was confirmed !!! \n"
-        append content \n "ZNC Connection Port is: $zncNonSSLPort"
-        append content \n "ZNC Username is: $username"
-        append content \n "ZNC password set is: $password"
-        append content \n "ZNC requester e-mail address is: $email"
-        append content \n "To connect to his ZNC Client on the user must use /server ${znchost} ${zncNonSSLPort} $username:${password}"
-        append content \n ""
-        append content \n "To change your znc password login on webpage address: http://${znchost}:${zncNonSSLPort} with the provided user and password."
-        append content \n "He has to access 'Your Settings' and in 'Authentication' section he can type the new password."
-        append content \n ""
-        append content \n\n "An e-mail with login data and login/change password instructions was sent also to requester`s e-mail address : $email."
-        if { $zncRequestMail != "" } {
-        append content \n\n\n\n "If this e-mail is spam please instantly contact $zncAdminMail"
-        }
-        mail:simply:send $zncRequestMail  "$username Request ZNC-Account at $zncnetworkname was confirmed" $content
-}
-
-proc mail:simply:sendUserDeny { username } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
-        set email [getuser $username COMMENT]
-        set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
-        append content \n "Your ZNC Request was denyed.\n"
-        if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact $zncAdminMail"
-        }
-        mail:simply:send $email "ZNC-Account Request Denyed at $zncnetworkname" $content
-}
-
-proc mail:simply:sendUserDel { username } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
-        set email [getuser $username COMMENT]
-        set content "Hey $username,\n The request to delete your ZNC-Account hosted by $zncnetworkname is now COMPLETED !!!\n"
-        append content \n "Your Free-ZNC account was deleted.\n"
-        if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If the request didn't came from you or want to place a complaint regarding this action please contact $zncAdminMail"
-        }
-        mail:simply:send $email "ZNC-Account Deleted at $zncnetworkname" $content
-}
-
-proc mail:simply:sendUsernoIdle { username } {
-        global zncnetworkname znchost zncNonSSLPort zncSSLPort zncWebNonSSLPort zncWebSSLPort zncAdminName zncAdminMail
-        set email [getuser $username COMMENT]
-        set content "Hey $username,\n You've requested a ZNC-Account hosted by $zncnetworkname\n"
-        append content \n "Your Free-ZNC account was deleted due of inactivity period for more than 15 days.\n"
-        if { $zncAdminMail != "" } {
-        append content \n\n\n\n "If you want to place a complaint regarding this decision please contact $zncAdminMail"
-        }
-        mail:simply:send $email "ZNC-Account Deleted at $zncnetworkname" $content
-}
-
-
 proc eggdrop:helpfunction:isNotZNCChannel { chan } {
         return [expr ! [channel get $chan znc]]
 }
@@ -1199,7 +1089,7 @@ setudef flag znc
 bind PUB - "${scriptCommandPrefix}Request" znc:PUB:request
 bind PUB Y "${scriptCommandPrefix}Confirm" znc:PUB:confirm
 bind PUB Y "${scriptCommandPrefix}chemail" znc:PUB:chemail
-bind PUB Y "${scriptCommandPrefix}AddVhost" znc:PUB:addvhost
+#bind PUB Y "${scriptCommandPrefix}AddVhost" znc:PUB:addvhost
 bind PUB Q "${scriptCommandPrefix}chpass" znc:PUB:chpass
 bind PUB Y "${scriptCommandPrefix}Deny" znc:PUB:deny
 bind PUB Y "${scriptCommandPrefix}DelUser" znc:PUB:delUser
@@ -1211,17 +1101,17 @@ bind PUB - "${scriptCommandPrefix}Admins" znc:PUB:Admins
 bind PUB YQ "${scriptCommandPrefix}Online" znc:PUB:Online
 bind PUB YQ "${scriptCommandPrefix}Offline" znc:PUB:Offline
 bind PUB - "${scriptCommandPrefix}help" znc:PUB:help
-bind PUB - "${scriptCommandPrefix}version" znc:PUB:version
+#bind PUB - "${scriptCommandPrefix}version" znc:PUB:version
 
 bind msgm f * znc:chatproc
-bind join -|- * joinnotice
+#bind join -|- * joinnotice
 bind pub - !check status:cmd
 
 ## private binds --------------------------------------------------------------
 bind MSG - "Request" znc:MSG:request
 bind MSG Y "Confirm" znc:MSG:confirm
 bind MSG Y "chemail" znc:MSG:chemail
-bind MSG Y "AddVhost" znc:MSG:addvhost
+#bind MSG Y "AddVhost" znc:MSG:addvhost
 bind MSG YQ "chpass" znc:MSG:chpass
 bind MSG Y "Deny" znc:MSG:deny
 bind MSG Y "DelUser" znc:MSG:delUser
@@ -1232,7 +1122,7 @@ bind MSG Y "Online" znc:MSG:Online
 bind MSG Y "Offline" znc:MSG:Offline
 bind MSG Y "lastseen" znc:MSG:lastseen
 bind MSG - "help" znc:MSG:help
-bind MSG - "version" znc:MSG:version
+#bind MSG - "version" znc:MSG:version
 bind MSG - "Admins" znc:MSG:Admins
 
 

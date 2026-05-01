@@ -78,11 +78,19 @@ set scriptNetwork "NetIRC IRC Network"
 set scriptUpdater "NetIRC IRC Network"
 set scriptUpdaterMail "admin@netirc.eu"
 set scriptversion "5.0"
-set scriptversionUpdated "5.0"
+set scriptversionUpdated "5.1"
 set scriptdebug 0
 set scriptUseBigHeader 1
 
-putlog "$scriptname loading (v$scriptversion)..."
+proc znc:version:pretty {} {
+    global scriptversion scriptversionUpdated
+    if {![info exists scriptversionUpdated] || $scriptversionUpdated eq $scriptversion} {
+        return $scriptversion
+    }
+    return "$scriptversion ($scriptversionUpdated)"
+}
+
+putlog "$scriptname loading (v[znc:version:pretty])..."
 
 ## Toggles
 # zncWarnNonZncChannel   : NOTICE if someone uses a command on a chan without +znc.
@@ -139,7 +147,8 @@ array set zncFmt {
     bindhost_pool_full  {All outbound IPs are currently at capacity (max %s accounts per IP). Your ZNC account was created without a bindhost; staff can assign one manually with: %saddvhost <user> <ip>}
     chemail_busy        {Updating e-mail address for "%s"...}
     chpass_busy         {Updating password for "%s"...}
-    lastseen_busy       {Querying the ZNC *lastseen module, results will be forwarded to online admins...}
+    lastseen_busy       {Querying *lastseen; NOTICEs start a few seconds after ZNC stops sending lines...}
+    lastseen_wait       {Another lastseen query is already running. Try again in a few seconds.}
     listunconf_busy     {Looking up pending (unconfirmed) accounts...}
     online_busy         {Marking "%s" as online...}
     offline_busy        {Marking "%s" as offline...}
@@ -247,8 +256,14 @@ set zncSmtpPass ""
 set zncSmtpTls "starttls"
 set zncCurlPath "/usr/bin/curl"
 
-# Prefix for ZNC module clients (*controlpanel, *lastseen, ...); must match ZNC config.
+# ZNC pseudo-client prefix (*controlpanel, *lastseen, ...); match ZNC StatusPrefix.
 set zncprefix "*"
+
+set zncLastseenIdleSec 12
+set zncLastseenNoticeDelay 0.45
+set zncLastseenFailsafeSec 180
+set zncLastseenRxIdleSec 3
+# set zncLastseenDebug 1
 
 # Bouncer hostname and port (user-facing strings and mail bodies).
 set znchost "chat.netirc.eu"
@@ -404,6 +419,121 @@ proc znc:lastseen:send {cmd} {
     znc:irc:out "PRIVMSG ${zncprefix}lastseen :$cmd"
 }
 
+proc znc:lastseen:session_busy {} {
+    global znc_lastseen_pending znc_lastseen_sendq znc_lastseen_drain_utimer \
+        znc_lastseen_rx_buf znc_lastseen_rx_idle_timer
+    if {[info exists znc_lastseen_pending] && $znc_lastseen_pending ne ""} { return 1 }
+    if {[info exists znc_lastseen_rx_idle_timer]} { return 1 }
+    if {[info exists znc_lastseen_rx_buf] && [llength $znc_lastseen_rx_buf] > 0} { return 1 }
+    if {[info exists znc_lastseen_sendq] && [llength $znc_lastseen_sendq] > 0} { return 1 }
+    if {[info exists znc_lastseen_drain_utimer]} { return 1 }
+    return 0
+}
+
+proc znc:lastseen:enqueue_notice {dest line} {
+    global znc_lastseen_sendq znc_lastseen_drain_utimer
+    if {![info exists znc_lastseen_sendq]} { set znc_lastseen_sendq {} }
+    lappend znc_lastseen_sendq [list $dest $line]
+    if {![info exists znc_lastseen_drain_utimer]} {
+        set znc_lastseen_drain_utimer [utimer 0 [list znc:lastseen:drain_notice_queue]]
+    }
+}
+
+proc znc:lastseen:drain_notice_queue {} {
+    global znc_lastseen_sendq znc_lastseen_drain_utimer zncLastseenNoticeDelay
+    unset -nocomplain znc_lastseen_drain_utimer
+    if {![info exists zncLastseenNoticeDelay] || $zncLastseenNoticeDelay < 0.1} {
+        set zncLastseenNoticeDelay 0.45
+    }
+    if {![info exists znc_lastseen_sendq] || [llength $znc_lastseen_sendq] == 0} {
+        return
+    }
+    set pair [lindex $znc_lastseen_sendq 0]
+    set znc_lastseen_sendq [lrange $znc_lastseen_sendq 1 end]
+    set dest [lindex $pair 0]
+    set txt [lindex $pair 1]
+    putserv "NOTICE $dest :\[\002lastseen\002\] $txt"
+    if {[llength $znc_lastseen_sendq] > 0} {
+        set znc_lastseen_drain_utimer [utimer $zncLastseenNoticeDelay \
+            [list znc:lastseen:drain_notice_queue]]
+    }
+}
+
+proc znc:lastseen:clear_session {{force 0}} {
+    global znc_lastseen_pending znc_lastseen_clear_timer znc_lastseen_failsafe_timer \
+        znc_lastseen_line_count znc_lastseen_sendq znc_lastseen_drain_utimer \
+        znc_lastseen_rx_buf znc_lastseen_rx_idle_timer scriptname
+    if {$force} {
+        if {[info exists znc_lastseen_clear_timer]} {
+            catch {killutimer $znc_lastseen_clear_timer}
+        }
+        if {[info exists znc_lastseen_failsafe_timer]} {
+            catch {killutimer $znc_lastseen_failsafe_timer}
+        }
+        if {[info exists znc_lastseen_rx_idle_timer]} {
+            catch {killutimer $znc_lastseen_rx_idle_timer}
+        }
+        if {[info exists znc_lastseen_drain_utimer]} {
+            catch {killutimer $znc_lastseen_drain_utimer}
+        }
+        if {[info exists znc_lastseen_sendq] && [llength $znc_lastseen_sendq] > 0} {
+            putlog "$scriptname: lastseen failsafe dropped [llength $znc_lastseen_sendq] queued NOTICE(s)."
+        }
+        unset -nocomplain znc_lastseen_pending znc_lastseen_clear_timer znc_lastseen_failsafe_timer \
+            znc_lastseen_line_count znc_lastseen_sendq znc_lastseen_drain_utimer \
+            znc_lastseen_rx_buf znc_lastseen_rx_idle_timer
+        return
+    }
+    if {[info exists znc_lastseen_sendq] && [llength $znc_lastseen_sendq] > 0} {
+        set znc_lastseen_clear_timer [utimer 1 [list znc:lastseen:clear_session 0]]
+        return
+    }
+    if {[info exists znc_lastseen_drain_utimer]} {
+        set znc_lastseen_clear_timer [utimer 1 [list znc:lastseen:clear_session 0]]
+        return
+    }
+    if {[info exists znc_lastseen_clear_timer]} {
+        catch {killutimer $znc_lastseen_clear_timer}
+    }
+    if {[info exists znc_lastseen_failsafe_timer]} {
+        catch {killutimer $znc_lastseen_failsafe_timer}
+    }
+    unset -nocomplain znc_lastseen_pending znc_lastseen_clear_timer znc_lastseen_failsafe_timer \
+        znc_lastseen_line_count znc_lastseen_sendq znc_lastseen_drain_utimer \
+        znc_lastseen_rx_buf znc_lastseen_rx_idle_timer
+}
+
+proc znc:lastseen:flush_rx {} {
+    global znc_lastseen_rx_buf znc_lastseen_rx_idle_timer znc_lastseen_pending \
+        znc_lastseen_clear_timer zncLastseenIdleSec scriptname zncLastseenDebug
+    unset -nocomplain znc_lastseen_rx_idle_timer
+    if {![info exists znc_lastseen_rx_buf]} { set znc_lastseen_rx_buf {} }
+    if {[llength $znc_lastseen_rx_buf] == 0} { return }
+    if {[info exists zncLastseenDebug] && $zncLastseenDebug} {
+        putlog "$scriptname: lastseen flush [llength $znc_lastseen_rx_buf] line(s) to NOTICE queue."
+    }
+    set buf $znc_lastseen_rx_buf
+    set znc_lastseen_rx_buf {}
+    foreach line $buf {
+        if {[info exists znc_lastseen_pending] && $znc_lastseen_pending ne ""} {
+            znc:lastseen:enqueue_notice $znc_lastseen_pending $line
+        }
+        foreach u [userlist A] {
+            set n2 [hand2nick $u]
+            if {$n2 eq ""} { continue }
+            if {[info exists znc_lastseen_pending] && $znc_lastseen_pending ne ""} {
+                if {[string equal -nocase $n2 $znc_lastseen_pending]} { continue }
+            }
+            znc:lastseen:enqueue_notice $n2 $line
+        }
+    }
+    if {[info exists znc_lastseen_clear_timer]} {
+        catch {killutimer $znc_lastseen_clear_timer}
+    }
+    if {![info exists zncLastseenIdleSec]} { set zncLastseenIdleSec 12 }
+    set znc_lastseen_clear_timer [utimer $zncLastseenIdleSec [list znc:lastseen:clear_session 0]]
+}
+
 proc znc:block {u} {
     global zncprefix
     znc:irc:out "PRIVMSG ${zncprefix}blockuser :block $u"
@@ -435,7 +565,7 @@ proc znc:mail:message_id {} {
 # Build a complete RFC822 message with proper headers, CRLF line endings, and UTF-8 body.
 # Empty Cc is omitted (some MTAs dislike empty Cc:).
 proc znc:mail:build_rfc822 {from toList subject body cc} {
-    global scriptname scriptversion
+    global scriptname
     set msg ""
     append msg "Date: [znc:mail:rfc822_date]\r\n"
     append msg "From: $from\r\n"
@@ -450,7 +580,7 @@ proc znc:mail:build_rfc822 {from toList subject body cc} {
     append msg "MIME-Version: 1.0\r\n"
     append msg "Content-Type: text/plain; charset=UTF-8\r\n"
     append msg "Content-Transfer-Encoding: 8bit\r\n"
-    append msg "X-Mailer: $scriptname v$scriptversion (Eggdrop Tcl)\r\n"
+    append msg "X-Mailer: $scriptname v[znc:version:pretty] (Eggdrop Tcl)\r\n"
     append msg "Auto-Submitted: auto-generated\r\n"
     append msg "\r\n"
     # Normalize LF to CRLF in the body.
@@ -701,7 +831,7 @@ proc znc:vhost:pick {vhostList maxPer} {
 # Shared footer used by every outgoing e-mail. Identifies the sender, the
 # support contact, and avoids "who sent me this?" confusion for end users.
 proc znc:mail:footer {} {
-    global scriptname scriptversion scriptAuthor scriptServer scriptServerPort
+    global scriptname scriptAuthor scriptServer scriptServerPort
     global scriptNetwork zncnetworkname zncAdminMail znchost
     set f "\n"
     append f "--------------------------------------------------------------\n"
@@ -711,7 +841,7 @@ proc znc:mail:footer {} {
         append f "Support: $zncAdminMail\n"
     }
     append f "This is an automated message generated by\n"
-    append f "$scriptname v$scriptversion (by $scriptAuthor).\n"
+    append f "$scriptname v[znc:version:pretty] (by $scriptAuthor).\n"
     append f "Please do not reply directly unless you want to contact staff.\n"
     return $f
 }
@@ -1501,9 +1631,30 @@ proc znc:cmd:status {nick host handle chan arg} {
 }
 
 proc znc:cmd:lastseen {nick host handle chan arg} {
+    global znc_lastseen_pending znc_lastseen_clear_timer znc_lastseen_failsafe_timer \
+        zncLastseenFailsafeSec znc_lastseen_line_count znc_lastseen_sendq \
+        znc_lastseen_rx_buf znc_lastseen_rx_idle_timer znc_lastseen_drain_utimer
+    if {[znc:lastseen:session_busy]} {
+        znc:notice $nick [znc:fmt lastseen_wait]
+        return
+    }
+    if {![info exists zncLastseenFailsafeSec] || $zncLastseenFailsafeSec < 30} {
+        set zncLastseenFailsafeSec 180
+    }
+    if {[info exists znc_lastseen_clear_timer]} {
+        catch {killutimer $znc_lastseen_clear_timer}
+    }
+    if {[info exists znc_lastseen_failsafe_timer]} {
+        catch {killutimer $znc_lastseen_failsafe_timer}
+    }
+    unset -nocomplain znc_lastseen_clear_timer znc_lastseen_failsafe_timer znc_lastseen_line_count \
+        znc_lastseen_sendq znc_lastseen_drain_utimer znc_lastseen_rx_buf znc_lastseen_rx_idle_timer
+    set znc_lastseen_line_count 0
+    set znc_lastseen_sendq {}
+    set znc_lastseen_rx_buf {}
+    set znc_lastseen_pending $nick
+    set znc_lastseen_failsafe_timer [utimer $zncLastseenFailsafeSec [list znc:lastseen:clear_session 1]]
     znc:notice $nick [znc:fmt lastseen_busy]
-    # The actual output comes back asynchronously as a PRIVMSG from *lastseen
-    # and is dispatched to online admins by znc:chatproc (see the msgm bind).
     znc:lastseen:send "show"
 }
 
@@ -1600,8 +1751,8 @@ proc znc:cmd:offline {nick host handle chan arg} {
 }
 
 proc znc:cmd:version {nick host handle chan arg} {
-    global scriptname scriptversion scriptAuthor scriptServer scriptServerPort
-    znc:notice $nick "\002$scriptname\002 v$scriptversion - written by $scriptAuthor (server: $scriptServer $scriptServerPort)"
+    global scriptname scriptAuthor scriptServer scriptServerPort
+    znc:notice $nick "\002$scriptname\002 v[znc:version:pretty] - written by $scriptAuthor (server: $scriptServer $scriptServerPort)"
 }
 
 # Per-topic detailed help. Keep each topic to a few lines: everything is
@@ -1650,8 +1801,8 @@ proc znc:help:topic {nick topic} {
         }
         "lastseen" {
             znc:notice $nick "\002${p}lastseen\002                (staff: +n/+m/+Y/+Q)"
-            znc:notice $nick "  Queries the ZNC *lastseen module. Output is forwarded to staff"
-            znc:notice $nick "  marked online (+A)."
+            znc:notice $nick "  Queries the ZNC *lastseen module. Output is sent by NOTICE to you"
+            znc:notice $nick "  and to staff marked online (+A)."
         }
         "listunconfirmedusers" - "luu" {
             znc:notice $nick "\002${p}listunconfirmedusers\002   (alias: \002${p}luu\002, staff)"
@@ -1696,7 +1847,7 @@ proc znc:help:topic {nick topic} {
 }
 
 proc znc:cmd:help {nick host handle chan arg} {
-    global scriptCommandPrefix scriptname scriptversion botnick
+    global scriptCommandPrefix scriptname botnick
     set p $scriptCommandPrefix
     set topic [string tolower [lindex [split [string trim $arg]] 0]]
     set priv [expr {$chan eq $nick}]
@@ -1709,7 +1860,7 @@ proc znc:cmd:help {nick host handle chan arg} {
     set isAdmin [expr {[validuser $handle] && [matchattr $handle Q]}]
     set isStaff [expr {[validuser $handle] && ([matchattr $handle n] || [matchattr $handle m] || [matchattr $handle Y])}]
 
-    znc:notice $nick "\002$scriptname\002 v$scriptversion - command list  (use ${p}help <command> for details)"
+    znc:notice $nick "\002$scriptname\002 v[znc:version:pretty] - command list  (use ${p}help <command> for details)"
     znc:notice $nick "-----------------------------------------------------------------"
     znc:notice $nick "\002User commands\002"
     znc:notice $nick "  ${p}request <user> <email>   Request a FREE ZNC account"
@@ -1730,7 +1881,7 @@ proc znc:cmd:help {nick host handle chan arg} {
         znc:notice $nick "  ${p}listunconfirmedusers  (${p}luu)     List users awaiting approval"
         znc:notice $nick "  ${p}online  \[handle\]                 Mark yourself (or <handle>) online (+A)"
         znc:notice $nick "  ${p}offline \[handle\]                 Mark yourself (or <handle>) offline (-A)"
-        znc:notice $nick "  ${p}lastseen                         Query ZNC *lastseen module"
+        znc:notice $nick "  ${p}lastseen                         Last-seen listing (NOTICE to you + online +A)"
         znc:notice $nick "  ${p}check <ip>                       Audit connections per bindhost"
     }
 
@@ -1871,18 +2022,75 @@ proc znc:MSG:status {n h hand t} { znc:cmd:status $n $h $hand $n $t }
 proc znc:MSG:help {n h hand t} { znc:cmd:help $n $h $hand $n $t }
 proc znc:MSG:version {n h hand t} { znc:cmd:version $n $h $hand $n $t }
 
-# Forward output coming from ZNC informational modules (currently *lastseen)
-# to every bot user marked as online staff (+A). Uses a text tag so the
-# destination users can tell where the line came from.
+proc znc:lastseen:ingest {nick host handle text} {
+    global znc_lastseen_failsafe_timer znc_lastseen_line_count \
+        znc_lastseen_rx_buf znc_lastseen_rx_idle_timer zncLastseenRxIdleSec
+    if {$text eq ""} { return }
+    if {![info exists zncLastseenRxIdleSec] || $zncLastseenRxIdleSec < 1} {
+        set zncLastseenRxIdleSec 3
+    }
+    if {![info exists znc_lastseen_line_count]} { set znc_lastseen_line_count 0 }
+    if {[info exists znc_lastseen_failsafe_timer]} {
+        catch {killutimer $znc_lastseen_failsafe_timer}
+        unset -nocomplain znc_lastseen_failsafe_timer
+    }
+    if {![info exists znc_lastseen_rx_buf]} { set znc_lastseen_rx_buf {} }
+    foreach rawline [split $text "\n"] {
+        set line [string trimright $rawline]
+        if {$line eq ""} { continue }
+        incr znc_lastseen_line_count
+        lappend znc_lastseen_rx_buf $line
+    }
+    if {[info exists znc_lastseen_rx_idle_timer]} {
+        catch {killutimer $znc_lastseen_rx_idle_timer}
+    }
+    set znc_lastseen_rx_idle_timer [utimer $zncLastseenRxIdleSec [list znc:lastseen:flush_rx]]
+}
+
 proc znc:chatproc {nick host handle text} {
     if {![string match -nocase "*lastseen" $nick]} { return }
-    if {$text eq ""} { return }
-    foreach u [userlist A] {
-        set n2 [hand2nick $u]
-        if {$n2 ne ""} {
-            putquick "NOTICE $n2 :\[\002lastseen\002\] $text"
-        }
+    znc:lastseen:ingest $nick $host $handle $text
+}
+
+proc znc:notc:lastseen {nick uhost hand dest text} {
+    global botnick
+    if {![string equal -nocase $dest $botnick]} { return }
+    if {![string match -nocase "*lastseen" $nick]} { return }
+    znc:lastseen:ingest $nick $uhost $hand $text
+}
+
+proc znc:raw_lastseen_ingest {from msg} {
+    global botnick zncLastseenDebug scriptname
+    set f $from
+    if {[string index $f 0] eq ":"} { set f [string range $f 1 end] }
+    set src [lindex [split $f !] 0]
+    if {![string match -nocase "*lastseen" $src]} { return 0 }
+    set m [string trimleft $msg]
+    if {![regexp {^(\S+)\s+:(.*)$} $m -> target payload]} {
+        if {![regexp {^(\S+)\s+(.*)$} $m -> target payload]} { return 0 }
     }
+    if {![string equal -nocase $target $botnick]} { return 0 }
+    if {[info exists zncLastseenDebug] && $zncLastseenDebug} {
+        putlog "$scriptname: lastseen raw from=$src payload=[string length $payload] chars"
+    }
+    znc:lastseen:ingest $src "" "" $payload
+    return 1
+}
+proc znc:raw:privmsg {from code msg} {
+    if {![string equal -nocase $code "PRIVMSG"]} { return 0 }
+    return [znc:raw_lastseen_ingest $from $msg]
+}
+proc znc:raw:notc {from code msg} {
+    if {![string equal -nocase $code "NOTICE"]} { return 0 }
+    return [znc:raw_lastseen_ingest $from $msg]
+}
+proc znc:rawt:privmsg {from code msg tagdict} {
+    if {![string equal -nocase $code "PRIVMSG"]} { return 0 }
+    return [znc:raw_lastseen_ingest $from $msg]
+}
+proc znc:rawt:notc {from code msg tagdict} {
+    if {![string equal -nocase $code "NOTICE"]} { return 0 }
+    return [znc:raw_lastseen_ingest $from $msg]
 }
 
 proc znc:join:notice {nick host handle chan} {
@@ -1999,23 +2207,29 @@ bind MSG -  "status" znc:MSG:status
 bind MSG -  "help" znc:MSG:help
 bind MSG -  "version" znc:MSG:version
 
-# msgm: catches PRIVMSG from ZNC pseudo-clients (no Eggdrop handle, so we use
-# flag "-|-"). One handler forwards *lastseen output to online staff, another
-# listens for *controlpanel success/error messages and rolls back failed
-# account creations. Eggdrop runs both binds for every matching message.
+bind raw - PRIVMSG znc:raw:privmsg
+bind raw - NOTICE znc:raw:notc
+if {[catch {
+    bind rawt - PRIVMSG znc:rawt:privmsg
+    bind rawt - NOTICE znc:rawt:notc
+} err]} {
+    global scriptname
+    putlog "$scriptname: optional IRCv3 bind rawt skipped: $err"
+}
+bind notc - * znc:notc:lastseen
 bind msgm -|- * znc:chatproc
 bind msgm -|- * znc:cp:reply
 bind join -|- * znc:join:notice
 
 ## Startup banner
 proc znc:banner:log {} {
-    global scriptname scriptversion scriptNetwork scriptAuthor
+    global scriptname scriptNetwork scriptAuthor
     global scriptServer scriptServerPort scriptUpdater scriptUpdaterMail
     global zncMailMethod zncChannelName zncnetworkname znchost zncNonSSLPort
     global scriptCommandPrefix vhost zncMaxUsersPerBindhost scriptdebug
     set p $scriptCommandPrefix
     putlog "================================================================"
-    putlog " $scriptname  v$scriptversion"
+    putlog " $scriptname  v[znc:version:pretty]"
     putlog "   Written by     : $scriptAuthor"
     putlog "   IRC server     : $scriptServer $scriptServerPort"
     putlog "   Network        : $scriptNetwork ($zncnetworkname)"

@@ -78,7 +78,7 @@ set scriptNetwork "NetIRC IRC Network"
 set scriptUpdater "NetIRC IRC Network"
 set scriptUpdaterMail "admin@netirc.eu"
 set scriptversion "5.0"
-set scriptversionUpdated "5.2"
+set scriptversionUpdated "5.3"
 set scriptdebug 0
 set scriptUseBigHeader 1
 
@@ -845,11 +845,18 @@ proc znc:vhost:pick {vhostList maxPer} {
         incr cnt($k)
     }
     set avail {}
+    set minCount ""
     foreach ip $list {
         set k [string tolower $ip]
         set n 0
         if {[info exists cnt($k)]} { set n $cnt($k) }
-        if {$n < $maxPer} { lappend avail $ip }
+        if {$n >= $maxPer} { continue }
+        if {$minCount eq "" || $n < $minCount} {
+            set minCount $n
+            set avail [list $ip]
+        } elseif {$n == $minCount} {
+            lappend avail $ip
+        }
     }
     if {[llength $avail] == 0} { return "" }
     return [lindex $avail [expr {int(rand()*[llength $avail])}]]

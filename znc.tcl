@@ -78,7 +78,7 @@ set scriptNetwork "NetIRC IRC Network"
 set scriptUpdater "NetIRC IRC Network"
 set scriptUpdaterMail "admin@netirc.eu"
 set scriptversion "5.0"
-set scriptversionUpdated "5.1"
+set scriptversionUpdated "5.2"
 set scriptdebug 0
 set scriptUseBigHeader 1
 
@@ -102,6 +102,9 @@ putlog "$scriptname loading (v[znc:version:pretty])..."
 # zncRateWindowSec       : sliding window for rate limiting (seconds).
 # zncRollbackTimeoutSec  : if *controlpanel doesn't confirm AddUser within this
 #                          many seconds, assume success (no active rollback).
+# zncConfirmWaitRetrySec : when !confirm runs while !request is still provisioning,
+#                          wait this many seconds before retrying AddServer.
+# zncConfirmWaitMaxRetries: max retries before forcing AddServer anyway.
 # zncRevealPassOnConfirm : 1 = show the password in the staff NOTICE on confirm,
 #                          0 = hide it (password only goes by e-mail + bot log).
 #                          Recommended: 0.
@@ -114,6 +117,8 @@ set zncUsePutNow          1
 set zncRateMaxPerHour     10
 set zncRateWindowSec      3600
 set zncRollbackTimeoutSec 20
+set zncConfirmWaitRetrySec 1
+set zncConfirmWaitMaxRetries 20
 set zncRevealPassOnConfirm 1
 set zncAuditFile "logs/znc-audit.log"
 
@@ -211,6 +216,7 @@ proc znc:audit {operator action target {note ""}} {
 # the sender) so that someone switching nicks on the same host still counts
 # towards the same quota. A stale entry older than zncRateWindowSec is dropped.
 array set zncRateRequest {}
+array set zncProvisioning {}
 
 proc znc:rate:clean {key} {
     global zncRateRequest zncRateWindowSec
@@ -241,6 +247,29 @@ proc znc:rate:record {host} {
     set key [string tolower $host]
     znc:rate:clean $key
     lappend zncRateRequest($key) [clock seconds]
+}
+
+# Track usernames whose initial !request provisioning is still in flight.
+# !confirm can race this chain and attempt AddServer before AddNetwork exists.
+proc znc:provisioning:mark {user} {
+    global zncProvisioning
+    set key [string tolower [string trim $user]]
+    if {$key eq ""} { return }
+    set zncProvisioning($key) [clock seconds]
+}
+
+proc znc:provisioning:clear {user} {
+    global zncProvisioning
+    set key [string tolower [string trim $user]]
+    if {$key eq ""} { return }
+    catch { unset zncProvisioning($key) }
+}
+
+proc znc:provisioning:active {user} {
+    global zncProvisioning
+    set key [string tolower [string trim $user]]
+    if {$key eq ""} { return 0 }
+    return [info exists zncProvisioning($key)]
 }
 
 ## Network, ZNC, and mail routing
@@ -874,7 +903,7 @@ proc znc:mail:requestStaff {user pass} {
     append body " STAFF ACTIONS (run on IRC)\n"
     append body "================================================================\n"
     append body "  Approve  :  !confirm $user\n"
-    append body "  Reject   :  !deny    $user\n\n"
+    append body "  Reject   :  !deny $user\n\n"
     append body "If you believe this request is spam or abusive, simply deny it;\n"
     append body "the requester will receive a short automated notification.\n"
     append body [znc:mail:footer]
@@ -1074,6 +1103,7 @@ proc znc:request:do_bindhost_run {nick user pass netextra} {
 }
 
 proc znc:request:step7_done {nick user pass} {
+    znc:provisioning:clear $user
     znc:notice $nick [znc:fmt request_done $nick $user]
     znc:next [list znc:request:mail_staff $user $pass]
 }
@@ -1183,6 +1213,7 @@ proc znc:request:apply_step {nick user pass netextra step} {
             default {}
         }
     } err]} {
+        znc:provisioning:clear $user
         putlog "$scriptname: znc:request:apply_step $user step $step: $err"
         znc:notice $nick [znc:fmt request_zncfail]
     }
@@ -1251,13 +1282,15 @@ proc znc:request {nick host handle chan arg} {
     # Start tracking the pending ZNC creation so we can roll back if
     # *controlpanel answers with an error.
     znc:rollback:track $nick $user
+    znc:provisioning:mark $user
     znc:audit $nick "request" $user "email=$email host=$host"
 
     znc:next [list znc:request:apply_step $nick $user $pass $netextra 0]
 }
 
-proc znc:confirm:apply_step {requester user pass step} {
+proc znc:confirm:apply_step {requester user pass step {attempt 0}} {
     global zncnetworkname zncircserver zncircserverport zncChannelName scriptname
+    global zncConfirmWaitRetrySec zncConfirmWaitMaxRetries
     if {[catch {
         switch -- $step {
             0 {
@@ -1284,6 +1317,22 @@ proc znc:confirm:apply_step {requester user pass step} {
                 znc:next [list znc:confirm:mails_after_ok $requester $user $pass]
             }
             3 {
+                if {[znc:provisioning:active $user]} {
+                    if {![info exists zncConfirmWaitRetrySec] || $zncConfirmWaitRetrySec < 1} {
+                        set zncConfirmWaitRetrySec 1
+                    }
+                    if {![info exists zncConfirmWaitMaxRetries] || $zncConfirmWaitMaxRetries < 1} {
+                        set zncConfirmWaitMaxRetries 20
+                    }
+                    if {$attempt < $zncConfirmWaitMaxRetries} {
+                        if {$attempt == 0} {
+                            znc:notice $requester "ZNC setup for \"$user\" is still finishing; waiting before attaching the default server."
+                        }
+                        utimer $zncConfirmWaitRetrySec [list znc:confirm:apply_step $requester $user $pass 3 [expr {$attempt + 1}]]
+                        return
+                    }
+                    putlog "$scriptname: confirm wait timeout for $user; forcing AddServer anyway"
+                }
                 znc:cp "AddServer $user $zncnetworkname $zncircserver $zncircserverport"
                 znc:next [list znc:confirm:apply_step $requester $user $pass 4]
             }
@@ -1350,17 +1399,22 @@ proc znc:rollback:expire {key} {
 # private messages. We filter on sender nick "*controlpanel" and then look
 # for error or success signatures matching one of the pending users.
 proc znc:cp:reply {nick host handle text} {
-    global zncPending scriptname scriptname
+    global zncPending scriptname
     if {![string match -nocase "*controlpanel*" $nick]} { return }
     # Normalize: strip color/bold codes that some ZNC versions emit.
     regsub -all {[\002\003\017\026\037]} $text "" text
     foreach key [array names zncPending] {
         # Match various phrasings. ZNC master/versions differ slightly.
+        # Guard against cross-user false positives: only treat a line as an
+        # error for this pending user if the text mentions the username.
+        set mentionsKey [string match -nocase "*$key*" $text]
         set isError [expr {
-            [string match -nocase "*already exists*" $text] ||
-            [string match -nocase "*Error*$key*"     $text] ||
-            [string match -nocase "*No such user*"   $text] ||
-            [string match -nocase "*Invalid*name*"   $text]
+            $mentionsKey && (
+                [string match -nocase "*already exists*" $text] ||
+                [string match -nocase "*Error*$key*"     $text] ||
+                [string match -nocase "*No such user*"   $text] ||
+                [string match -nocase "*Invalid*name*"   $text]
+            )
         }]
         set isOk [expr {
             [string match -nocase "*User $key added*" $text] ||
@@ -1369,6 +1423,7 @@ proc znc:cp:reply {nick host handle text} {
         if {$isError} {
             set requester $zncPending($key)
             znc:rollback:expire $key
+            znc:provisioning:clear $key
             if {[validuser $key]} {
                 catch { deluser $key }
             }

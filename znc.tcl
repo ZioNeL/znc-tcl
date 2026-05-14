@@ -78,7 +78,7 @@ set scriptNetwork "NetIRC IRC Network"
 set scriptUpdater "NetIRC IRC Network"
 set scriptUpdaterMail "admin@netirc.eu"
 set scriptversion "5.0"
-set scriptversionUpdated "5.3"
+set scriptversionUpdated "5.4"
 set scriptdebug 0
 set scriptUseBigHeader 1
 

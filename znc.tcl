@@ -1324,7 +1324,6 @@ proc znc:confirm:apply_step {requester user pass step {attempt 0}} {
                 znc:next [list znc:confirm:mails_after_ok $requester $user $pass]
             }
             3 {
-                set deferAddServer 0
                 if {[znc:provisioning:active $user]} {
                     if {![info exists zncConfirmWaitRetrySec] || $zncConfirmWaitRetrySec < 1} {
                         set zncConfirmWaitRetrySec 1
@@ -1337,16 +1336,12 @@ proc znc:confirm:apply_step {requester user pass step {attempt 0}} {
                             znc:notice $requester "ZNC setup for \"$user\" is still finishing; waiting before attaching the default server."
                         }
                         utimer $zncConfirmWaitRetrySec [list znc:confirm:apply_step $requester $user $pass 3 [expr {$attempt + 1}]]
-                        set deferAddServer 1
+                        return
                     }
-                    if {!$deferAddServer} {
-                        putlog "$scriptname: confirm wait timeout for $user; forcing AddServer anyway"
-                    }
+                    putlog "$scriptname: confirm wait timeout for $user; forcing AddServer anyway"
                 }
-                if {!$deferAddServer} {
-                    znc:cp "AddServer $user $zncnetworkname $zncircserver $zncircserverport"
-                    znc:next [list znc:confirm:apply_step $requester $user $pass 4]
-                }
+                znc:cp "AddServer $user $zncnetworkname $zncircserver $zncircserverport"
+                znc:next [list znc:confirm:apply_step $requester $user $pass 4]
             }
             4 {
                 znc:cp "ADDChan $user $zncnetworkname $zncChannelName"

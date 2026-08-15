@@ -22,6 +22,7 @@
 #     !deluser <user>               Delete a confirmed account
 #     !noidle <user>                Delete an idle account (>15 days)
 #     !chemail <user> <email>       Update a user's e-mail address
+#     !adduser <user> <vhost>       Create an account immediately and connect it
 #     !addvhost <user> <ip>         Assign a bindhost and trigger reconnect
 #     !info <user>                  Show stored data for a user
 #     !listunconfirmedusers (!luu)  List users waiting for approval
@@ -78,7 +79,7 @@ set scriptNetwork "NetIRC IRC Network"
 set scriptUpdater "NetIRC IRC Network"
 set scriptUpdaterMail "admin@netirc.eu"
 set scriptversion "5.0"
-set scriptversionUpdated "5.4"
+set scriptversionUpdated "5.5"
 set scriptdebug 0
 set scriptUseBigHeader 1
 
@@ -104,6 +105,8 @@ putlog "$scriptname loading (v[znc:version:pretty])..."
 #                          many seconds, assume success (no active rollback).
 # zncConfirmWaitRetrySec : when !confirm runs while !request is still provisioning,
 #                          wait this many seconds before retrying AddServer.
+# zncAdduserCleanupSec   : after !deluser, wait this many seconds (and send
+#                          an extra DelUser) before !adduser recreates the same name.
 # zncConfirmWaitMaxRetries: max retries before forcing AddServer anyway.
 # zncRevealPassOnConfirm : 1 = show the password in the staff NOTICE on confirm,
 #                          0 = hide it (password only goes by e-mail + bot log).
@@ -119,6 +122,7 @@ set zncRateWindowSec      3600
 set zncRollbackTimeoutSec 20
 set zncConfirmWaitRetrySec 1
 set zncConfirmWaitMaxRetries 20
+set zncAdduserCleanupSec  2
 set zncRevealPassOnConfirm 1
 set zncAuditFile "logs/znc-audit.log"
 
@@ -148,6 +152,10 @@ array set zncFmt {
     deny_wait           {Denying request for "%s", please wait...}
     deluser_wait        {Deleting account "%s", please wait...}
     noidle_wait         {Removing idle account "%s", please wait...}
+    adduser_syntax      {Syntax: %sadduser <username> <vhost>}
+    vhost_not_in_pool   {Bindhost "%s" is not in the configured vhost pool. Use an IP from the list.}
+    adduser_wait        {Creating account "%s" with bindhost %s, please wait...}
+    adduser_ok          {"%s" is ready and connecting. Bindhost: %s. Username: "%s"  password: %s}
     addvhost_wait       {Applying bindhost change for "%s", please wait...}
     bindhost_pool_full  {All outbound IPs are currently at capacity (max %s accounts per IP). Your ZNC account was created without a bindhost; staff can assign one manually with: %saddvhost <user> <ip>}
     chemail_busy        {Updating e-mail address for "%s"...}
@@ -184,6 +192,13 @@ proc znc:safeArg {s} {
 proc znc:safeArgs {args} {
     foreach a $args { if {![znc:safeArg $a]} { return 0 } }
     return 1
+}
+
+# Same loose check used by !request / !chemail. Empty and "admin-created"
+# placeholders must fail so deny/noidle/deluser never send mail to junk.
+proc znc:email:ok {s} {
+    if {$s eq ""} { return 0 }
+    return [regexp {^[^@[:space:]]+@[^@[:space:]]+\.[A-Za-z]{2,}$} $s]
 }
 
 # Append a structured line to the audit log. Failures are non-fatal and
@@ -270,6 +285,41 @@ proc znc:provisioning:active {user} {
     set key [string tolower [string trim $user]]
     if {$key eq ""} { return 0 }
     return [info exists zncProvisioning($key)]
+}
+
+# Remember a recent ZNC DelUser so !adduser can wait before recreating
+# the same username (controlpanel deletes are not instantaneous).
+array set zncRecentlyDeleted {}
+
+proc znc:deleted:mark {user} {
+    global zncRecentlyDeleted zncAdduserCleanupSec
+    set key [string tolower [string trim $user]]
+    if {$key eq ""} { return }
+    set zncRecentlyDeleted($key) [clock seconds]
+    set wait 8
+    if {[info exists zncAdduserCleanupSec] && $zncAdduserCleanupSec > 0} {
+        set wait [expr {$zncAdduserCleanupSec + 6}]
+    }
+    utimer $wait [list znc:deleted:clear $key]
+}
+
+proc znc:deleted:clear {key} {
+    global zncRecentlyDeleted
+    catch { unset zncRecentlyDeleted($key) }
+}
+
+proc znc:deleted:waitsec {user} {
+    global zncRecentlyDeleted zncAdduserCleanupSec
+    set key [string tolower [string trim $user]]
+    if {$key eq ""} { return 0 }
+    if {![info exists zncRecentlyDeleted($key)]} { return 0 }
+    if {![info exists zncAdduserCleanupSec] || $zncAdduserCleanupSec < 1} {
+        set zncAdduserCleanupSec 2
+    }
+    set age [expr {[clock seconds] - $zncRecentlyDeleted($key)}]
+    set need [expr {$zncAdduserCleanupSec + 1}]
+    if {$age >= $need} { return 0 }
+    return [expr {$need - $age}]
 }
 
 ## Network, ZNC, and mail routing
@@ -862,6 +912,25 @@ proc znc:vhost:pick {vhostList maxPer} {
     return [lindex $avail [expr {int(rand()*[llength $avail])}]]
 }
 
+# 1 if <ip> is in the configured vhost pool (case-insensitive).
+# If the pool is empty, allow anything so staff is not locked out.
+proc znc:vhost:inpool {ip} {
+    global vhost
+    set want [string tolower [string trim $ip]]
+    if {$want eq ""} { return 0 }
+    if {![info exists vhost]} { return 1 }
+    set list {}
+    foreach raw $vhost {
+        set got [string trim $raw]
+        if {$got ne ""} { lappend list $got }
+    }
+    if {[llength $list] == 0} { return 1 }
+    foreach got $list {
+        if {[string equal -nocase $got $want]} { return 1 }
+    }
+    return 0
+}
+
 ## Mail templates
 
 # Shared footer used by every outgoing e-mail. Identifies the sender, the
@@ -924,7 +993,7 @@ proc znc:mail:userConfirmed {user pass} {
     global zncnetworkname znchost zncNonSSLPort zncAdminMail
     set email ""
     catch { set email [getuser $user COMMENT] }
-    if {$email eq ""} { return }
+    if {![znc:email:ok $email]} { return }
 
     set subject "\[ZNC\] Your account is ready: $user on $zncnetworkname"
 
@@ -1001,7 +1070,7 @@ proc znc:mail:staffConfirmed {user pass} {
 # Notify the requester that their request has been denied.
 proc znc:mail:deny_to {email} {
     global zncnetworkname zncAdminMail
-    if {$email eq ""} { return }
+    if {![znc:email:ok $email]} { return }
 
     set subject "\[ZNC\] Your request on $zncnetworkname has been declined"
 
@@ -1035,7 +1104,7 @@ proc znc:mail:deny {user} {
 # because by the time this is called the Eggdrop user record may be gone.
 proc znc:mail:removed_reason {email reason} {
     global zncnetworkname zncAdminMail
-    if {$email eq ""} { return }
+    if {![znc:email:ok $email]} { return }
 
     set subject "\[ZNC\] Your account on $zncnetworkname has been removed"
 
@@ -1068,29 +1137,30 @@ proc znc:mail:deleted {user reason} {
 ## Request and confirm
 
 # One LoadModule (or LoadNetModule) per utimer; avoids many znc:cp calls in a single interpreter slice.
-proc znc:request:loadmods_step {nick user pass netextra mods} {
+proc znc:request:loadmods_step {nick user pass mods} {
     if {[llength $mods] == 0} {
-        znc:next [list znc:request:apply_step $nick $user $pass $netextra 3]
+        znc:next [list znc:request:apply_step $nick $user $pass 3]
         return
     }
     znc:cp "LoadModule $user [lindex $mods 0]"
-    znc:next [list znc:request:loadmods_step $nick $user $pass $netextra [lrange $mods 1 end]]
+    znc:next [list znc:request:loadmods_step $nick $user $pass [lrange $mods 1 end]]
 }
 
-proc znc:request:netmods_step {nick user pass netextra netname mods} {
+proc znc:request:netmods_step {nick user pass mods} {
+    global zncnetworkname
     if {[llength $mods] == 0} {
-        znc:next [list znc:request:apply_step $nick $user $pass $netextra 7]
+        znc:next [list znc:request:apply_step $nick $user $pass 7]
         return
     }
-    znc:cp "LoadNetModule $user $netname [lindex $mods 0]"
-    znc:next [list znc:request:netmods_step $nick $user $pass $netextra $netname [lrange $mods 1 end]]
+    znc:cp "LoadNetModule $user $zncnetworkname [lindex $mods 0]"
+    znc:next [list znc:request:netmods_step $nick $user $pass [lrange $mods 1 end]]
 }
 
-proc znc:request:do_bindhost {nick user pass netextra} {
-    znc:next [list znc:request:do_bindhost_run $nick $user $pass $netextra]
+proc znc:request:do_bindhost {nick user pass} {
+    znc:next [list znc:request:do_bindhost_run $nick $user $pass]
 }
 
-proc znc:request:do_bindhost_run {nick user pass netextra} {
+proc znc:request:do_bindhost_run {nick user pass} {
     global scriptname vhost zncMaxUsersPerBindhost scriptCommandPrefix
     if {[catch {
         if {![info exists zncMaxUsersPerBindhost]} { set zncMaxUsersPerBindhost 3 }
@@ -1106,7 +1176,7 @@ proc znc:request:do_bindhost_run {nick user pass netextra} {
         putlog "$scriptname: znc:request:do_bindhost_run $user: $err"
         znc:notice $nick [znc:fmt request_zncfail]
     }
-    znc:next [list znc:request:apply_step $nick $user $pass $netextra 5]
+    znc:next [list znc:request:apply_step $nick $user $pass 5]
 }
 
 proc znc:request:step7_done {nick user pass} {
@@ -1177,41 +1247,41 @@ proc znc:noidle:after_znc {nick u email} {
     znc:next [list znc:mail:removed_reason $email {Idle 15+ days}]
 }
 
-proc znc:request:apply_step {nick user pass netextra step} {
+proc znc:request:apply_step {nick user pass step} {
     global scriptname zncnetworkname zncDefaultUserModules zncDefaultNetworkModules vhost
     if {[catch {
         switch -- $step {
             0 {
                 znc:cp "AddUser $user $pass"
-                znc:next [list znc:request:apply_step $nick $user $pass $netextra 1]
+                znc:next [list znc:request:apply_step $nick $user $pass 1]
             }
             1 {
                 znc:block $user
-                znc:next [list znc:request:apply_step $nick $user $pass $netextra 2]
+                znc:next [list znc:request:apply_step $nick $user $pass 2]
             }
             2 {
-                znc:next [list znc:request:loadmods_step $nick $user $pass $netextra $zncDefaultUserModules]
+                znc:next [list znc:request:loadmods_step $nick $user $pass $zncDefaultUserModules]
             }
             3 {
                 znc:cp "AddNetwork $user $zncnetworkname"
-                znc:next [list znc:request:apply_step $nick $user $pass $netextra 4]
+                znc:next [list znc:request:apply_step $nick $user $pass 4]
             }
             4 {
                 if {[llength $vhost] > 0} {
-                    znc:next [list znc:request:do_bindhost $nick $user $pass $netextra]
+                    znc:next [list znc:request:do_bindhost $nick $user $pass]
                 } else {
-                    znc:next [list znc:request:apply_step $nick $user $pass $netextra 5]
+                    znc:next [list znc:request:apply_step $nick $user $pass 5]
                 }
             }
             5 {
                 znc:cp "Set RealName $user $user"
-                znc:next [list znc:request:apply_step $nick $user $pass $netextra 6]
+                znc:next [list znc:request:apply_step $nick $user $pass 6]
             }
             6 {
-                if {$netextra ne ""} {
-                    znc:next [list znc:request:netmods_step $nick $user $pass $netextra $netextra $zncDefaultNetworkModules]
+                if {[llength $zncDefaultNetworkModules] > 0} {
+                    znc:next [list znc:request:netmods_step $nick $user $pass $zncDefaultNetworkModules]
                 } else {
-                    znc:next [list znc:request:apply_step $nick $user $pass $netextra 7]
+                    znc:next [list znc:request:apply_step $nick $user $pass 7]
                 }
             }
             7 {
@@ -1232,9 +1302,6 @@ proc znc:request {nick host handle chan arg} {
     set parts [split [string trim $arg]]
     set user  [string trim [lindex $parts 0]]
     set email [string trim [lindex $parts 1]]
-    # Optional 3rd token: extra network name to add on top of the default one.
-    # Kept positional (token #2) instead of the previous nonsensical index 4.
-    set netextra [string trim [lindex $parts 2]]
 
     if {$user eq "" || $email eq ""} {
         znc:notice $nick [znc:fmt request_syntax $scriptCommandPrefix]
@@ -1258,7 +1325,7 @@ proc znc:request {nick host handle chan arg} {
 
     # E-mail sanity: we don't try to be RFC5322-perfect, just reject the most
     # obvious junk so the request mail has a chance of reaching someone.
-    if {![regexp {^[^@[:space:]]+@[^@[:space:]]+\.[A-Za-z]{2,}$} $email]} {
+    if {![znc:email:ok $email]} {
         znc:notice $nick "Invalid e-mail address - please supply a real one (e.g. name@example.org)."
         return
     }
@@ -1292,7 +1359,7 @@ proc znc:request {nick host handle chan arg} {
     znc:provisioning:mark $user
     znc:audit $nick "request" $user "email=$email host=$host"
 
-    znc:next [list znc:request:apply_step $nick $user $pass $netextra 0]
+    znc:next [list znc:request:apply_step $nick $user $pass 0]
 }
 
 proc znc:confirm:apply_step {requester user pass step {attempt 0}} {
@@ -1324,6 +1391,7 @@ proc znc:confirm:apply_step {requester user pass step {attempt 0}} {
                 znc:next [list znc:confirm:mails_after_ok $requester $user $pass]
             }
             3 {
+                set deferAddServer 0
                 if {[znc:provisioning:active $user]} {
                     if {![info exists zncConfirmWaitRetrySec] || $zncConfirmWaitRetrySec < 1} {
                         set zncConfirmWaitRetrySec 1
@@ -1336,12 +1404,16 @@ proc znc:confirm:apply_step {requester user pass step {attempt 0}} {
                             znc:notice $requester "ZNC setup for \"$user\" is still finishing; waiting before attaching the default server."
                         }
                         utimer $zncConfirmWaitRetrySec [list znc:confirm:apply_step $requester $user $pass 3 [expr {$attempt + 1}]]
-                        return
+                        set deferAddServer 1
                     }
-                    putlog "$scriptname: confirm wait timeout for $user; forcing AddServer anyway"
+                    if {!$deferAddServer} {
+                        putlog "$scriptname: confirm wait timeout for $user; forcing AddServer anyway"
+                    }
                 }
-                znc:cp "AddServer $user $zncnetworkname $zncircserver $zncircserverport"
-                znc:next [list znc:confirm:apply_step $requester $user $pass 4]
+                if {!$deferAddServer} {
+                    znc:cp "AddServer $user $zncnetworkname $zncircserver $zncircserverport"
+                    znc:next [list znc:confirm:apply_step $requester $user $pass 4]
+                }
             }
             4 {
                 znc:cp "ADDChan $user $zncnetworkname $zncChannelName"
@@ -1359,6 +1431,10 @@ proc znc:confirm {requester host handle chan arg} {
     set user [string trim [lindex [split [string trim $arg]] 0]]
     if {$user eq ""} {
         znc:notice $requester [znc:fmt confirm_syntax $scriptCommandPrefix]
+        return
+    }
+    if {![znc:safeArg $user]} {
+        znc:notice $requester "Your input contains characters that are not accepted."
         return
     }
     if {[matchattr $user C]} {
@@ -1415,12 +1491,14 @@ proc znc:cp:reply {nick host handle text} {
         # Guard against cross-user false positives: only treat a line as an
         # error for this pending user if the text mentions the username.
         set mentionsKey [string match -nocase "*$key*" $text]
+        # Only AddUser-level failures. Generic "already exists" also matches
+        # AddNetwork / AddServer replies and must not roll back the Eggdrop user.
         set isError [expr {
             $mentionsKey && (
-                [string match -nocase "*already exists*" $text] ||
-                [string match -nocase "*Error*$key*"     $text] ||
-                [string match -nocase "*No such user*"   $text] ||
-                [string match -nocase "*Invalid*name*"   $text]
+                [string match -nocase "*user*$key*already exists*" $text] ||
+                [string match -nocase "*already exists*user*$key*" $text] ||
+                [string match -nocase "*Error: User *$key*"        $text] ||
+                [string match -nocase "*Invalid*name*"             $text]
             )
         }]
         set isOk [expr {
@@ -1461,7 +1539,7 @@ proc znc:cmd:chemail {nick host handle chan arg} {
         znc:notice $nick "Your input contains characters that are not accepted."
         return
     }
-    if {![regexp {^[^@[:space:]]+@[^@[:space:]]+\.[A-Za-z]{2,}$} $em]} {
+    if {![znc:email:ok $em]} {
         znc:notice $nick "Invalid e-mail address."
         return
     }
@@ -1521,10 +1599,167 @@ proc znc:cmd:addvhost {nick host handle chan arg} {
         znc:notice $nick "Invalid bindhost - use IPv4, IPv6 or a hostname."
         return
     }
+    if {![znc:vhost:inpool $v]} {
+        znc:notice $nick [znc:fmt vhost_not_in_pool $v]
+        return
+    }
     if {![validuser $u]} { znc:notice $nick "Unknown user: $u"; return }
     znc:notice $nick [znc:fmt addvhost_wait $u]
     znc:audit $nick "addvhost" $u "bindhost=$v"
     znc:next [list znc:addvhost_flow $nick $u $v 0]
+}
+
+# Staff shortcut: create a confirmed ZNC account in one shot and attach it
+# to the script's default IRC network. Skips !request / !confirm / e-mail.
+proc znc:adduser:loadmods {nick user pass vhostip mods} {
+    if {[llength $mods] == 0} {
+        znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 4]
+        return
+    }
+    znc:cp "LoadModule $user [lindex $mods 0]"
+    znc:next [list znc:adduser:loadmods $nick $user $pass $vhostip [lrange $mods 1 end]]
+}
+
+proc znc:adduser:netmods {nick user pass vhostip mods} {
+    global zncnetworkname
+    if {[llength $mods] == 0} {
+        znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 9]
+        return
+    }
+    znc:cp "LoadNetModule $user $zncnetworkname [lindex $mods 0]"
+    znc:next [list znc:adduser:netmods $nick $user $pass $vhostip [lrange $mods 1 end]]
+}
+
+proc znc:adduser:apply_step {nick user pass vhostip step} {
+    global scriptname zncnetworkname zncircserver zncircserverport zncChannelName
+    global zncDefaultUserModules zncDefaultNetworkModules zncAdduserCleanupSec
+    if {[catch {
+        switch -- $step {
+            0 {
+                # Drop a leftover ZNC user from a recent !deluser, then wait.
+                znc:cp "DelUser $user"
+                set wait 2
+                if {[info exists zncAdduserCleanupSec] && $zncAdduserCleanupSec >= 1} {
+                    set wait $zncAdduserCleanupSec
+                }
+                set extra [znc:deleted:waitsec $user]
+                if {$extra > $wait} { set wait $extra }
+                utimer $wait [list znc:adduser:apply_step $nick $user $pass $vhostip 1]
+            }
+            1 {
+                znc:cp "AddUser $user $pass"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 2]
+            }
+            2 {
+                # Covers the reuse path if AddUser said "already exists".
+                znc:cp "Set password $user $pass"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 3]
+            }
+            3 {
+                znc:next [list znc:adduser:loadmods $nick $user $pass $vhostip $zncDefaultUserModules]
+            }
+            4 {
+                znc:cp "AddNetwork $user $zncnetworkname"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 5]
+            }
+            5 {
+                znc:cp "Set bindhost $user $vhostip"
+                catch { setuser $user XTRA bindhost $vhostip }
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 6]
+            }
+            6 {
+                znc:cp "SetNetwork bindhost $user $zncnetworkname $vhostip"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 7]
+            }
+            7 {
+                znc:cp "Set RealName $user $user"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 8]
+            }
+            8 {
+                if {[llength $zncDefaultNetworkModules] > 0} {
+                    znc:next [list znc:adduser:netmods $nick $user $pass $vhostip $zncDefaultNetworkModules]
+                } else {
+                    znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 9]
+                }
+            }
+            9 {
+                znc:cp "AddServer $user $zncnetworkname $zncircserver $zncircserverport"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 10]
+            }
+            10 {
+                znc:cp "ADDChan $user $zncnetworkname $zncChannelName"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 11]
+            }
+            11 {
+                znc:cp "Reconnect $user $zncnetworkname"
+                znc:next [list znc:adduser:apply_step $nick $user $pass $vhostip 12]
+            }
+            12 {
+                znc:provisioning:clear $user
+                znc:notice $nick [znc:fmt adduser_ok $user $vhostip $user $pass]
+                putlog "$scriptname: ADDUSER $user bindhost=$vhostip (by $nick) - password: $pass"
+            }
+            default {}
+        }
+    } err]} {
+        znc:provisioning:clear $user
+        putlog "$scriptname: znc:adduser:apply_step $user step $step: $err"
+        znc:notice $nick "adduser failed partway - check bot log. Staff may need to fix the account."
+    }
+}
+
+proc znc:cmd:adduser {nick host handle chan arg} {
+    global scriptCommandPrefix zncPasswordSecurityLevel zncPasswordLength
+    global zncMaxUsersPerBindhost
+    set parts [split [string trim $arg]]
+    set user [string trim [lindex $parts 0]]
+    set v    [string trim [lindex $parts 1]]
+    if {$user eq "" || $v eq ""} {
+        znc:notice $nick [znc:fmt adduser_syntax $scriptCommandPrefix]
+        return
+    }
+    if {![znc:safeArgs $user $v]} {
+        znc:notice $nick "Your input contains characters that are not accepted."
+        return
+    }
+    if {![regexp {^[A-Za-z][A-Za-z0-9_.-]{1,31}$} $user]} {
+        znc:notice $nick "Invalid username - use 2-32 chars: letters, digits, underscore, dot or dash (must start with a letter)."
+        return
+    }
+    if {![regexp {^[A-Za-z0-9.:_-]{1,128}$} $v]} {
+        znc:notice $nick "Invalid bindhost - use IPv4, IPv6 or a hostname."
+        return
+    }
+    if {![znc:vhost:inpool $v]} {
+        znc:notice $nick [znc:fmt vhost_not_in_pool $v]
+        return
+    }
+    if {[validuser $user]} {
+        znc:notice $nick [znc:fmt username_taken]
+        return
+    }
+    if {![info exists zncMaxUsersPerBindhost]} { set zncMaxUsersPerBindhost 3 }
+    set n 0
+    foreach h [userlist] {
+        if {![validuser $h]} { continue }
+        if {[catch {set got [getuser $h XTRA bindhost]}]} { continue }
+        if {[string equal -nocase [string trim $got] $v]} { incr n }
+    }
+    if {$n >= $zncMaxUsersPerBindhost} {
+        znc:notice $nick "Note: $v already has $n account(s) (cap $zncMaxUsersPerBindhost). Assigning it anyway as requested."
+    }
+    set pass [znc:randpw $zncPasswordSecurityLevel $zncPasswordLength]
+    if {![adduser $user]} {
+        znc:notice $nick [znc:fmt username_taken]
+        return
+    }
+    setuser $user COMMENT "admin-created"
+    chattr $user +Z
+    catch { setuser $user XTRA bindhost $v }
+    znc:provisioning:mark $user
+    znc:audit $nick "adduser" $user "bindhost=$v"
+    znc:notice $nick [znc:fmt adduser_wait $user $v]
+    znc:next [list znc:adduser:apply_step $nick $user $pass $v 0]
 }
 
 proc znc:cmd:chpass {nick host handle chan arg} {
@@ -1575,6 +1810,7 @@ proc znc:cmd:deny {nick host handle chan arg} {
             set em ""
             catch { set em [getuser $u COMMENT] }
             znc:cp "DelUser $u"
+            znc:deleted:mark $u
             znc:audit $nick "deny" $u "email=$em"
             znc:deny:after_znc $nick $u $em
         } err]} {
@@ -1603,6 +1839,7 @@ proc znc:cmd:deluser {nick host handle chan arg} {
         catch { set em [getuser $u COMMENT] }
         znc:cp "Set QuitMsg $u {ZNC account deleted}"
         znc:cp "DelUser $u"
+        znc:deleted:mark $u
         znc:audit $nick "deluser" $u "email=$em"
         znc:deluser:after_znc $nick $u $em
     } err]} {
@@ -1626,6 +1863,7 @@ proc znc:cmd:noidle {nick host handle chan arg} {
         catch { set em [getuser $u COMMENT] }
         znc:cp "Set QuitMsg $u {Deleted - idle 15+ days}"
         znc:cp "DelUser $u"
+        znc:deleted:mark $u
         znc:audit $nick "noidle" $u "email=$em"
         znc:noidle:after_znc $nick $u $em
     } err]} {
@@ -1856,6 +2094,12 @@ proc znc:help:topic {nick topic} {
             znc:notice $nick "  Resets a ZNC user password. Must be sent with:"
             znc:notice $nick "    /msg $botnick chpass <user> <pass>"
         }
+        "adduser" {
+            znc:notice $nick "\002${p}adduser\002 <username> <vhost>   (staff: +n/+m/+Y/+Q)"
+            znc:notice $nick "  Creates a confirmed ZNC account immediately (no !request / !confirm),"
+            znc:notice $nick "  assigns the given bindhost, and connects it to the script network."
+            znc:notice $nick "  The generated password is sent to you by NOTICE."
+        }
         "addvhost" {
             znc:notice $nick "\002${p}addvhost\002 <username> <ip>   (staff: +n/+m/+Y/+Q)"
             znc:notice $nick "  Assigns a specific outbound bindhost to an existing user and"
@@ -1938,6 +2182,7 @@ proc znc:cmd:help {nick host handle chan arg} {
         znc:notice $nick "  ${p}deluser <user>                   Delete a confirmed account"
         znc:notice $nick "  ${p}noidle <user>                    Delete an idle account"
         znc:notice $nick "  ${p}chemail <user> <email>           Change a user's e-mail"
+        znc:notice $nick "  ${p}adduser <user> <vhost>           Create account and connect it now"
         znc:notice $nick "  ${p}addvhost <user> <ip>             Assign outbound bindhost"
         znc:notice $nick "  ${p}info <user>                      Show stored data for a user"
         znc:notice $nick "  ${p}listunconfirmedusers  (${p}luu)     List users awaiting approval"
@@ -1972,6 +2217,11 @@ proc znc:PUB:chemail {n h hand c t} {
     if {![znc:pub:channelOk $n $c]} { return }
     if {![znc:mustStaff $n $hand]} { return }
     znc:cmd:chemail $n $h $hand $c $t
+}
+proc znc:PUB:adduser {n h hand c t} {
+    if {![znc:pub:channelOk $n $c]} { return }
+    if {![znc:mustStaff $n $hand]} { return }
+    znc:cmd:adduser $n $h $hand $c $t
 }
 proc znc:PUB:addvhost {n h hand c t} {
     if {![znc:pub:channelOk $n $c]} { return }
@@ -2052,6 +2302,10 @@ proc znc:MSG:chemail {n h hand t} {
     if {![znc:mustStaff $n $hand]} { return }
     znc:cmd:chemail $n $h $hand $n $t
 }
+proc znc:MSG:adduser {n h hand t} {
+    if {![znc:mustStaff $n $hand]} { return }
+    znc:cmd:adduser $n $h $hand $n $t
+}
 proc znc:MSG:addvhost {n h hand t} {
     if {![znc:mustStaff $n $hand]} { return }
     znc:cmd:addvhost $n $h $hand $n $t
@@ -2083,6 +2337,33 @@ proc znc:MSG:info {n h hand t} {
 proc znc:MSG:status {n h hand t} { znc:cmd:status $n $h $hand $n $t }
 proc znc:MSG:help {n h hand t} { znc:cmd:help $n $h $hand $n $t }
 proc znc:MSG:version {n h hand t} { znc:cmd:version $n $h $hand $n $t }
+proc znc:MSG:lastseen {n h hand t} {
+    if {![znc:mustStaff $n $hand]} { return }
+    znc:cmd:lastseen $n $h $hand $n $t
+}
+proc znc:MSG:online {n h hand t} {
+    if {![znc:mustStaff $n $hand]} { return }
+    znc:cmd:online $n $h $hand $n $t
+}
+proc znc:MSG:offline {n h hand t} {
+    if {![znc:mustStaff $n $hand]} { return }
+    znc:cmd:offline $n $h $hand $n $t
+}
+proc znc:MSG:check {n h hand t} {
+    if {![znc:mustStaff $n $hand]} { return }
+    set ip [lindex [split [string trim $t]] 0]
+    if {$ip eq ""} {
+        global scriptCommandPrefix
+        znc:notice $n "Syntax: ${scriptCommandPrefix}check <ip>"
+        return
+    }
+    if {![znc:safeArg $ip]} {
+        znc:notice $n "Your input contains characters that are not accepted."
+        return
+    }
+    znc:notice $n "Running check for $ip..."
+    znc:next [list znc:check:run $n $ip]
+}
 
 proc znc:lastseen:ingest {nick host handle text} {
     global znc_lastseen_failsafe_timer znc_lastseen_line_count \
@@ -2227,6 +2508,10 @@ proc znc:PUB:check {n h hand c arg} {
         znc:notice $n "Syntax: ${scriptCommandPrefix}check <ip>"
         return
     }
+    if {![znc:safeArg $ip]} {
+        znc:notice $n "Your input contains characters that are not accepted."
+        return
+    }
     znc:notice $n "Running check for $ip..."
     znc:next [list znc:check:run $n $ip]
 }
@@ -2237,6 +2522,7 @@ set p $scriptCommandPrefix
 bind PUB -  "${p}request" znc:PUB:request
 bind PUB -  "${p}confirm" znc:PUB:confirm
 bind PUB -  "${p}chemail" znc:PUB:chemail
+bind PUB -  "${p}adduser" znc:PUB:adduser
 bind PUB -  "${p}addvhost" znc:PUB:addvhost
 bind PUB -  "${p}chpass" znc:PUB:chpass
 bind PUB -  "${p}deny" znc:PUB:deny
@@ -2257,6 +2543,7 @@ bind PUB -  "${p}check" znc:PUB:check
 bind MSG -  "request" znc:MSG:request
 bind MSG -  "confirm" znc:MSG:confirm
 bind MSG -  "chemail" znc:MSG:chemail
+bind MSG -  "adduser" znc:MSG:adduser
 bind MSG -  "addvhost" znc:MSG:addvhost
 bind MSG -  "chpass" znc:MSG:chpass
 bind MSG -  "deny" znc:MSG:deny
@@ -2268,6 +2555,10 @@ bind MSG -  "info" znc:MSG:info
 bind MSG -  "status" znc:MSG:status
 bind MSG -  "help" znc:MSG:help
 bind MSG -  "version" znc:MSG:version
+bind MSG -  "lastseen" znc:MSG:lastseen
+bind MSG -  "online" znc:MSG:online
+bind MSG -  "offline" znc:MSG:offline
+bind MSG -  "check" znc:MSG:check
 
 bind raw - PRIVMSG znc:raw:privmsg
 bind raw - NOTICE znc:raw:notc
@@ -2310,7 +2601,7 @@ proc znc:banner:log {} {
     putlog "   ${p}version                  -  show script version"
     putlog " Staff commands (require +n / +m / +Y / +Q):"
     putlog "   ${p}confirm  ${p}deny  ${p}deluser  ${p}noidle  ${p}chemail"
-    putlog "   ${p}addvhost  ${p}info  ${p}lastseen"
+    putlog "   ${p}adduser  ${p}addvhost  ${p}info  ${p}lastseen"
     putlog "   ${p}listunconfirmedusers (${p}luu)  ${p}online  ${p}offline  ${p}check"
     putlog " Admin commands (+Q only, PRIVATE MSG to the bot):"
     putlog "   chpass <user> <newpass>"
